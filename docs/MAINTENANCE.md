@@ -58,6 +58,8 @@ New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 
 迁移期间请勿在源会话或目标副本继续聊天。准备期间源消息变化会中止迁移、恢复原绑定，新增消息仍留在源会话。
 
+包含工具调用/结果的会话返回 `OPERATION_HISTORY_REHOME_UNSUPPORTED`，因为当前重归属流程只复制文字，不能通过此流程迁移完整工具历史。原会话与绑定保留，不要删除工具事件绕过检查。尚未接收工具历史的会话迁移时会复制 `.operations.json` 队列与游标。
+
 ## 中断恢复
 
 `config-v3.json.migration-journal.json` 记录未完成的发布事务。
