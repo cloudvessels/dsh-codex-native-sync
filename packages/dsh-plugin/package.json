@@ -27,15 +27,15 @@
       "dsh": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4",
       "dshReleases": {
         "0.2.0-rc.2": "unknown",
-        "0.2.1-rc.2": "unknown",
-        "0.2.1-rc.3": "unknown",
-        "0.2.1-rc.4": "unknown"
+        "0.2.1-rc.2": "compatible",
+        "0.2.1-rc.3": "compatible",
+        "0.2.1-rc.4": "compatible"
       },
       "dshOperations": {
         "0.2.0-rc.2": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
-        "0.2.1-rc.2": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
-        "0.2.1-rc.3": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
-        "0.2.1-rc.4": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"}
+        "0.2.1-rc.2": {"install": "passed", "start": "passed", "uninstall": "passed", "rollback": "passed"},
+        "0.2.1-rc.3": {"install": "passed", "start": "passed", "uninstall": "passed", "rollback": "passed"},
+        "0.2.1-rc.4": {"install": "passed", "start": "passed", "uninstall": "passed", "rollback": "passed"}
       }
     },
     "bundle": {
