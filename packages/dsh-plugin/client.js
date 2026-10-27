@@ -5,7 +5,7 @@ window.__ModuleLoader__.load({
     const {SettingsFormModel, Switch, Button} = require('@deepseek-ai/dsh-client-ui-primitives');
     const NS = 'settings.codex-link';
     const ENTRY = 'codex-native-sync';
-    const KEYS = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate'];
+    const KEYS = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate', 'syncSteps'];
     const zh = {
       nav: 'Codex 同步', title: 'Codex 聊天同步',
       description: '在 Codex 和 DSH 的原有聊天中，自动接续双方的公开文字消息。',
@@ -14,7 +14,8 @@ window.__ModuleLoader__.load({
       reverseBind: '自动接入 DSH 新聊天', reverseBindHelp: '将 DSH 新建的非空聊天接入 Codex；已经绑定的聊天继续双向同步。',
       archiveMirror: '跟随 Codex 的归档状态', archiveMirrorHelp: '在 DSH 跟随归档或恢复对应聊天，历史数据仍然保留。',
       autoUpdate:'自动下载并升级', autoUpdateHelp:'每 6 小时检查本项目 GitHub 新版本，校验后缓存；两端退出后自动安装，不中断聊天。',
-      textOnly: '同步内容：你的消息和 AI 的公开回复。命令、工具输出和中间操作不参与同步。',
+      syncSteps:'同步 Codex 操作步骤到 DSH', syncStepsHelp:'默认关闭。开启生效后同步新增工具调用、命令及结果，会占用 DSH 上下文。关闭后已同步记录仍保留。',
+      textOnly: '文字消息双向同步；可选操作同步仅为 Codex → DSH。附件和私有推理不参与同步；接收操作记录不会执行工具。',
       runtime: '保存后 DSH 自动应用。Codex 端首次更新需要正常重启一次，此后设置自动生效。',
       loading: '正在读取设置…', readOnly: '当前部署不允许修改设置。',
       save: '保存设置', saving: '正在保存…', discard: '撤销修改', saved: '设置已保存',
@@ -28,7 +29,8 @@ window.__ModuleLoader__.load({
       reverseBind: 'Connect new DSH chats', reverseBindHelp: 'Mirror new non-empty DSH chats into Codex. Existing bindings remain bidirectional.',
       archiveMirror: 'Follow Codex archive state', archiveMirrorHelp: 'Archive or restore matching DSH chats while keeping their history.',
       autoUpdate:'Download and install updates', autoUpdateHelp:'Check this project on GitHub every 6 hours. Verify and cache downloads, then install after both clients close.',
-      textOnly: 'Only user messages and public AI replies are synced. Commands, tool output and intermediate operations stay out.',
+      syncSteps:'Sync Codex operations to DSH', syncStepsHelp:'Off by default. Collect new tool calls, commands and results after activation. Uses DSH context; turning off keeps previously imported records.',
+      textOnly: 'Text syncs both ways. Optional operations sync only from Codex to DSH. Attachments and private reasoning stay out; receipt never executes tools.',
       runtime: 'DSH applies saved settings automatically. Restart Codex once after this initial update; later changes apply automatically.',
       loading: 'Loading settings…', readOnly: 'This deployment stores settings read-only.',
       save: 'Save settings', saving: 'Saving…', discard: 'Discard changes', saved: 'Settings saved',
