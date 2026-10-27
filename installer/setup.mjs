@@ -61,7 +61,7 @@ export async function prepare(plan,{failAfter}={}){
     if(checked.status!==0||!/codex/i.test(checked.stdout))throw Error('原生 Codex 版本检查失败，请核对 --native-cli');
     for(const component of ['codex-bridge','dsh-plugin']){
       const source=path.join(plan.repo,'packages',component),target=path.join(plan.runtime,'suite','packages',component);
-      const names=component==='codex-bridge'?['package.json','history.mjs','text-sync.mjs','proxy-v3.mjs','src']:['package.json','lib','src','client.js','cordis.patch.yml','link.config.example.json'];
+      const names=component==='codex-bridge'?['package.json','history.mjs','text-sync.mjs','operation-sync.mjs','proxy-v3.mjs','src']:['package.json','lib','src','client.js','cordis.patch.yml','link.config.example.json'];
       for(const name of names)copyTree(tx,path.join(source,name),path.join(target,name));
     }
     for(const name of ['package.json','release.mjs','setup.mjs','installer','updater'])copyTree(tx,path.join(plan.repo,name),path.join(plan.runtime,'suite',name));
