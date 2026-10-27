@@ -1,0 +1,29 @@
+{
+  "name": "dsh-codex-link",
+  "version": "0.1.2",
+  "description": "DSH 与 Codex 原生会话的双向文字同步：设置页与开关",
+  "type": "module",
+  "main": "./lib/index.js",
+  "files": ["lib", "src", "client.js", "cordis.patch.yml", "link.config.example.json"],
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}
