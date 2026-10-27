@@ -72,4 +72,4 @@ New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 
 ## 标题
 
-插件 bundle 将 DSH 的 `session-title.maxTitleBytes` 设为 8192，用户 profile 的覆盖仍有更高优先级。如果源标题被自定义长度限制截断，状态会报告 `DSH_TITLE_LIMIT`，而不会将截断伪称为完全同名或持续重复改写。调整限制后重启 DSH 即可重新检查。
+插件通过公开的会话重命名接口同步标题，尊重 DSH 自身的长度限制。如果源标题被截断或规范化，状态会报告 `DSH_TITLE_LIMIT`，不会将截断伪称为完全同名或持续重复改写。当前源码的 bundle 只插入本插件入口，不再自动覆盖官方 `session-title` 配置；已有用户手动设置的标题限制不会被此变更移除。
