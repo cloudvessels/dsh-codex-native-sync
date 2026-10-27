@@ -79,7 +79,8 @@ try{
   report.failedStage=stage;report.reason=error.message.slice(0,300);
   if(stage==='install')report.install='failed';if(stage==='start')report.start='failed';
   // Keep authentication URLs and machine paths out of public reports.
-  const diagnostic=(error.stderr??log).replace(/https?:\/\/[^\s]+/g,'[url]').replaceAll(root,'[temporary-profile]');
+  const diagnostic=(error.stderr??log).replace(/https?:\/\/[^\s]+/g,'[url]').replaceAll(root,'[temporary-profile]').replaceAll(source,'[plugin-source]');
+  report.diagnostic=diagnostic.slice(-5000);
   if(process.env.DSH_TEST_DIAGNOSTICS==='1')console.error(diagnostic.slice(-12000));
   process.exitCode=1;
 }finally{
