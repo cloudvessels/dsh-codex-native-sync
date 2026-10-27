@@ -79,7 +79,17 @@ try{
   report.failedStage=stage;report.reason=error.message.slice(0,300);
   if(stage==='install')report.install='failed';if(stage==='start')report.start='failed';
   // Keep authentication URLs and machine paths out of public reports.
-  const diagnostic=(error.stderr??log).replace(/https?:\/\/[^\s]+/g,'[url]').replaceAll(root,'[temporary-profile]').replaceAll(source,'[plugin-source]');
+  let failureLog=(error.stdout??'')+'\n'+(error.stderr??log);
+  const logPath=/diagnostics: ([^\r\n]+)/.exec(error.stderr??'')?.[1];
+  if(logPath){
+    const relative=path.relative(root,path.resolve(logPath));
+    if(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative)&&fs.existsSync(logPath)&&!fs.lstatSync(logPath).isSymbolicLink()){
+      const handle=fs.openSync(logPath,'r');
+      try{const size=fs.fstatSync(handle).size,buffer=Buffer.alloc(Math.min(size,8000));fs.readSync(handle,buffer,0,buffer.length,Math.max(0,size-buffer.length));failureLog+='\n'+buffer.toString();}
+      finally{fs.closeSync(handle);}
+    }
+  }
+  const diagnostic=failureLog.replace(/https?:\/\/[^\s]+/g,'[url]').replaceAll(root,'[temporary-profile]').replaceAll(source,'[plugin-source]');
   report.diagnostic=diagnostic.slice(-5000);
   if(process.env.DSH_TEST_DIAGNOSTICS==='1')console.error(diagnostic.slice(-12000));
   process.exitCode=1;
