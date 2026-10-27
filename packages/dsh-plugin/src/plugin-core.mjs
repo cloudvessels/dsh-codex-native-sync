@@ -4,6 +4,7 @@ import http from 'node:http';
 import {timingSafeEqual,randomBytes} from 'node:crypto';
 import {runtime} from './runtime.mjs';
 import {appendToLiveSession} from './append-v2.mjs';
+import {appendOperations,planOperations} from './operation-steps.mjs';
 import {alignIdleAgent} from './agent-turns.mjs';
 import {createPublicCollector} from './codex-public-v3.mjs';
 import {atomicJson, readJson} from './state.mjs';
@@ -61,7 +62,7 @@ export async function apply(ctx, options = {}) {
   let listeningPort=config.port;
   const pushed = new Map(); // sessionId -> {count, lastAt, lastError}
 
-  const state = () => ({version: 3, pluginVersion: '0.1.3', settings: settings(), syncSteps: false, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
+  const state = () => ({version: 3, pluginVersion: '0.1.4', settings: settings(), syncSteps: settings().syncSteps, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
 
   const save = () => {
     try { fs.writeFileSync(path.join(root, 'sync-status.json'), JSON.stringify({...state(), pushed: Object.fromEntries(pushed)}, null, 2)); } catch {}
@@ -126,6 +127,24 @@ export async function apply(ctx, options = {}) {
     pushed.set(sessionId, {count: previous.count + result.appendedMessages, lastAt: new Date().toISOString(), lastError: null});
     save();
     return result;
+  }
+
+  async function appendStepsTo(sessionId,source,steps,{dry=false}={}){
+    if(!settings().syncSteps)throw Error('OPERATION_SYNC_DISABLED');
+    if(!settings().enabled)throw Error('SYNC_PAUSED');
+    const tid=[...bindings].find(([,sid])=>sid===sessionId)?.[0];
+    if(!tid||source!=='codex:'+tid)throw Error('OPERATION_BINDING_MISMATCH');
+    const found=await ctx.sessionController.resolveAgent(sessionId);
+    if(found.error)throw Error('RESOLVE_'+found.error.code);
+    if(found.agent.status!=='idle')throw Error('SESSION_BUSY');
+    if(!settings().syncSteps)throw Error('OPERATION_SYNC_DISABLED');
+    if(!settings().enabled)throw Error('SYNC_PAUSED');
+    alignIdleAgent(found.agent,found.agent.session.snapshotEvents());
+    if(dry){const plan=planOperations(found.agent.session,{source,steps},r.validate);return {ok:true,mode:'native-tool-events',appendedSteps:plan.appendedSteps};}
+    const result=appendOperations(found.agent.session,{source,steps},r.validate);
+    alignIdleAgent(found.agent,found.agent.session.snapshotEvents());
+    await ctx.sessionPersistence.flush();
+    const previous=pushed.get(sessionId)??{count:0};pushed.set(sessionId,{...previous,steps:(previous.steps??0)+result.appendedSteps,lastAt:new Date().toISOString(),lastError:null});save();return result;
   }
 
   async function sync() {
@@ -304,7 +323,7 @@ export async function apply(ctx, options = {}) {
       else if (url.pathname === '/snapshot') out = await snapshotFor(url.searchParams.get('sessionId') || legacySessionId);
       else if (url.pathname === '/append') out = await appendTo(parsed.sessionId, parsed.source || 'codex-push', parsed.messages || []);
       else if (url.pathname === '/bindings') out = Object.fromEntries(bindings);
-      else if (url.pathname === '/append-steps') throw Error('OPERATION_SYNC_DISABLED');
+      else if (url.pathname === '/append-steps') out=await appendStepsTo(parsed.sessionId,parsed.source,parsed.steps);
       else if (url.pathname === '/ensure') out = await ensureSession(parsed);
       else if (url.pathname === '/claim') throw Error('IMPLICIT_CLAIM_DISABLED');
       else if (url.pathname === '/register') {
@@ -320,7 +339,7 @@ export async function apply(ctx, options = {}) {
       else if (url.pathname === '/rehome') out = await rehomeSessions(parsed.dry !== false);
       else if (url.pathname === '/sync-titles') { await titleChain; out = await syncTitles(parsed.dry === true); }
       else if (url.pathname === '/unarchive') { await ctx.workspaceRegistry.unarchiveSession(parsed.sessionId); out = {sessionId: parsed.sessionId, archived: false}; }
-      else if (url.pathname === '/validate-steps') throw Error('OPERATION_SYNC_DISABLED');
+      else if (url.pathname === '/validate-steps') out=await appendStepsTo(parsed.sessionId,parsed.source,parsed.steps,{dry:true});
       else throw new Error('UNKNOWN_OPERATION');
       res.writeHead(200, {'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store'});
       res.end(JSON.stringify(out));

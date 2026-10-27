@@ -26,6 +26,7 @@ export default class CodexNativeSync {
     reverseBind: z.boolean().default(false).description('新 DSH 聊天自动在 Codex 建对应聊天').volatile(),
     archiveMirror: z.boolean().default(false).description('Codex 归档/恢复跟随到 DSH').volatile(),
     autoUpdate: z.boolean().default(true).description('自动下载新版本；两端退出后安装').volatile(),
+    syncSteps: z.boolean().default(false).description('将 Codex 工具操作同步到 DSH，会占用上下文').volatile(),
     bridgeConfig: z.string().default(DEFAULT_BRIDGE_CONFIG).description('Codex 桥接配置文件路径'),
   });
 
@@ -44,7 +45,7 @@ export default class CodexNativeSync {
       while(processAlive(readJson(lock,{}).pid)){if(Date.now()>until)throw Error('UPDATE_IN_PROGRESS');await delay(200);}
     }
     const {apply:coreApply}=await import('./plugin-core.mjs');
-    const current = () => Object.fromEntries(['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate'].map(key => [key, config[key]?.get?.() ?? config[key]]));
+    const current = () => Object.fromEntries(['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate', 'syncSteps'].map(key => [key, config[key]?.get?.() ?? config[key]]));
     let last = '';
     const publish = () => {
       const settings = current(), next = JSON.stringify(settings);
@@ -66,7 +67,7 @@ export default class CodexNativeSync {
     }, 'codex-link: live settings');
     yield await coreApply(this.ctx, {bridgeConfig, runtimeAnchor:anchor});
     this.ctx.logger?.info?.(
-      '[codex-link] 已启动：纯文字同步，设置实时生效',
+      '[codex-link] 已启动：文字同步、可选操作同步，设置实时生效',
     );
   }
 }

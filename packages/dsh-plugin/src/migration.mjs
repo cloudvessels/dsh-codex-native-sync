@@ -54,6 +54,8 @@ export async function migrateBinding({ctx,configFile,bindingsFile,binding,worksp
   const oldLedger=readJson(stored.ledgerFile,null);
   if(!oldLedger)throw Error('MIGRATION_LEDGER_MISSING');
   if(oldLedger.threadId!==binding.threadId||oldLedger.sessionId!==binding.sessionId)throw Error('LEDGER_BINDING_MISMATCH');
+  const sourceView=await ctx.sessionController.inspect(binding.sessionId);
+  if(sourceView.events.some(event=>event.type==='tool/call'||event.type==='tool/result'))throw Error('OPERATION_HISTORY_REHOME_UNSUPPORTED');
   const suffix=createHash('sha256').update(targetPath.toLowerCase()).digest('hex').slice(0,12);
   const newSessionId=binding.sessionId+'-r'+suffix;
   const newLedger=stored.ledgerFile.replace(/\.json$/,'')+'-r'+suffix+'.json';
@@ -100,6 +102,7 @@ export async function migrateBinding({ctx,configFile,bindingsFile,binding,worksp
     // immutable ID namespace. Copy the outbox with its original cursor intact.
     atomicJson(newLedger,{...oldLedger,sessionId:newSessionId});
     if(io.existsSync(stored.ledgerFile+'.forward.json'))atomicText(newLedger+'.forward.json',io.readFileSync(stored.ledgerFile+'.forward.json','utf8'));
+    if(io.existsSync(stored.ledgerFile+'.operations.json'))atomicText(newLedger+'.operations.json',io.readFileSync(stored.ledgerFile+'.operations.json','utf8'));
     const next={...stored,sessionId:newSessionId,identitySessionId:stored.identitySessionId??stored.sessionId,ledgerFile:newLedger};
     config.bindings[config.bindings.indexOf(stored)]=next;
     const mapping=beforeBindings===null?{version:2,bindings:[]}:JSON.parse(beforeBindings.replace(/^\uFEFF/,''));
