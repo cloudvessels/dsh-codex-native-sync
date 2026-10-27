@@ -5,7 +5,7 @@ window.__ModuleLoader__.load({
     const {SettingsFormModel, Switch, Button} = require('@deepseek-ai/dsh-client-ui-primitives');
     const NS = 'settings.codex-link';
     const ENTRY = 'codex-native-sync';
-    const KEYS = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror'];
+    const KEYS = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate'];
     const zh = {
       nav: 'Codex 同步', title: 'Codex 聊天同步',
       description: '在 Codex 和 DSH 的原有聊天中，自动接续双方的公开文字消息。',
@@ -13,6 +13,7 @@ window.__ModuleLoader__.load({
       autoBind: '自动接入 Codex 新聊天', autoBindHelp: '发现新的项目或聊天时，自动在 DSH 建立对应会话。',
       reverseBind: '自动接入 DSH 新聊天', reverseBindHelp: '将 DSH 新建的非空聊天接入 Codex；已经绑定的聊天继续双向同步。',
       archiveMirror: '跟随 Codex 的归档状态', archiveMirrorHelp: '在 DSH 跟随归档或恢复对应聊天，历史数据仍然保留。',
+      autoUpdate:'自动下载并升级', autoUpdateHelp:'每 6 小时检查本项目 GitHub 新版本，校验后缓存；两端退出后自动安装，不中断聊天。',
       textOnly: '同步内容：你的消息和 AI 的公开回复。命令、工具输出和中间操作不参与同步。',
       runtime: '保存后 DSH 自动应用。Codex 端首次更新需要正常重启一次，此后设置自动生效。',
       loading: '正在读取设置…', readOnly: '当前部署不允许修改设置。',
@@ -26,6 +27,7 @@ window.__ModuleLoader__.load({
       autoBind: 'Connect new Codex chats', autoBindHelp: 'Create matching DSH sessions for new Codex chats and projects.',
       reverseBind: 'Connect new DSH chats', reverseBindHelp: 'Mirror new non-empty DSH chats into Codex. Existing bindings remain bidirectional.',
       archiveMirror: 'Follow Codex archive state', archiveMirrorHelp: 'Archive or restore matching DSH chats while keeping their history.',
+      autoUpdate:'Download and install updates', autoUpdateHelp:'Check this project on GitHub every 6 hours. Verify and cache downloads, then install after both clients close.',
       textOnly: 'Only user messages and public AI replies are synced. Commands, tool output and intermediate operations stay out.',
       runtime: 'DSH applies saved settings automatically. Restart Codex once after this initial update; later changes apply automatically.',
       loading: 'Loading settings…', readOnly: 'This deployment stores settings read-only.',
