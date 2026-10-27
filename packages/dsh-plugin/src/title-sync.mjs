@@ -18,7 +18,7 @@ export async function syncBoundTitles(ctx, bindings, rows, dry = false, receipts
     const change = {threadId, sessionId, previous, title: wanted};
     if (dry) { result.changed.push(change); continue; }
     const receipt=receipts.get(sessionId);
-    if(receipt?.wanted===wanted&&receipt.stored===previous){result.errors.push({...change,error:'DSH_TITLE_LIMIT: increase session-title.maxTitleBytes and restart DSH'});continue;}
+    if(receipt?.wanted===wanted&&receipt.stored===previous){result.errors.push({...change,error:'DSH_TITLE_LIMIT: host normalized the title; sync preserves the host configuration'});continue;}
     try {
       const accepted = await ctx.sessionController.rename({sessionId, title: wanted});
       wrote=true;
