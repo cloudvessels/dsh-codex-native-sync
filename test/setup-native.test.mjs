@@ -9,6 +9,8 @@ import {Client} from './rpc-client.mjs';
 import {createPlan,prepare,activate,rollbackSetup} from '../installer/setup.mjs';
 import {SetupTransaction} from '../installer/transaction.mjs';
 import {readJson} from '../packages/dsh-plugin/src/state.mjs';
+import {checkForUpdate,applyPendingUpdate,digest,SOURCE} from '../updater/update.mjs';
+import {repository} from '../installer/setup.mjs';
 
 const compiler=process.env.CSC_TEST_PATH??path.join(process.env.WINDIR??'','Microsoft.NET','Framework64','v4.0.30319','csc.exe');
 const available=process.platform==='win32'&&process.env.CODEX_TEST_CLI&&fs.existsSync(compiler);
@@ -33,7 +35,7 @@ test('prepared installation registers a real native plugin, boots its runtime an
   await activate(f.runtime,{environment});
   assert.equal(SetupTransaction.load(f.runtime).data.environment.before,null);
   assert.match(fs.readFileSync(path.join(f.home,'config.toml'),'utf8'),/dsh-chat-sync@dsh-local-sync/);
-  const client=new Client(setting,['app-server','--analytics-default-enabled'],{CODEX_HOME:path.join(f.dir,'wrong-home'),DSH_BRIDGE_CONFIG:path.join(f.dir,'wrong-config.json')});
+  const client=new Client(setting,['app-server','--analytics-default-enabled'],{CODEX_HOME:path.join(f.dir,'wrong-home'),DSH_BRIDGE_CONFIG:path.join(f.dir,'wrong-config.json'),DSH_SYNC_DISABLE_UPDATES:'1'});
   f.cleanups.push(()=>client.close());await client.initialize();
   assert.equal(readJson(path.join(f.runtime,'last-launch.json')).mode,'bridge');
   await assert.rejects(rollbackSetup(f.runtime,environment),/CODEX_BRIDGE_MUST_BE_STOPPED|正常退出/);
@@ -60,4 +62,31 @@ test('a preparation failure restores an existing DSH profile and keeps unrelated
   await assert.rejects(prepare(f.plan,{failAfter:'files'}),/INJECTED_PREPARE_FAILURE/);
   assert.equal(fs.readFileSync(file,'utf8'),before);assert.equal(fs.readFileSync(marker,'utf8'),'retained');assert.deepEqual(readJson(f.plan.configFile),existing);
   assert.equal(fs.readFileSync(existing.dshTokenFile,'utf8'),'retain-this-token');assert.equal(readJson(existing.pluginControlFile).enabled,false);
+});
+
+test('downloaded update installs both real components and native plugin, retains data and rolls back to the prior version',{skip:!available},async t=>{
+  const f=await setupFixture(t);await prepare(f.plan);await activate(f.runtime,{startup:false});
+  const before=SetupTransaction.load(f.runtime).data;
+  const chat=path.join(f.runtime,'data','keep-chat.json');write(chat,'retain chat and ledger bytes');
+  const token=fs.readFileSync(readJson(f.plan.configFile).dshTokenFile,'utf8');
+  const source=path.join(f.dir,'new-release'),version='0.3.5-preview.1';fs.mkdirSync(source);
+  const copy=(from,to)=>{if(fs.statSync(from).isDirectory()){fs.mkdirSync(to,{recursive:true});for(const name of fs.readdirSync(from))copy(path.join(from,name),path.join(to,name));}else write(to,fs.readFileSync(from));};
+  for(const name of ['package.json','release.mjs','setup.mjs','installer','updater','packages'])copy(path.join(repository,name),path.join(source,name));
+  const manifest=JSON.parse(fs.readFileSync(path.join(source,'package.json')));manifest.version=version;write(path.join(source,'package.json'),JSON.stringify(manifest));
+  const bin=path.join(source,'artifacts/windows-x64/Codex-DSH-Runtime.exe');fs.mkdirSync(path.dirname(bin),{recursive:true});
+  const code=path.join(source,'packages/codex-bridge/src/Runtime.cs');
+  const built=spawnSync(compiler,['/nologo','/codepage:65001','/target:exe','/reference:System.Web.Extensions.dll','/out:'+bin,code],{encoding:'utf8',windowsHide:true});assert.equal(built.status,0,built.stdout+built.stderr);
+  write(path.join(path.dirname(bin),'runtime-build.json'),JSON.stringify({suiteVersion:version,sha256:digest(fs.readFileSync(bin)),sourceSha256:digest(fs.readFileSync(code))}));
+  const archive=path.join(f.dir,'new-release.zip'),tar=spawnSync('tar',['-a','-cf',archive,'-C',source,'.'],{encoding:'utf8',windowsHide:true});assert.equal(tar.status,0,tar.stderr);
+  const bytes=fs.readFileSync(archive),name=`dsh-codex-native-sync-${version}-windows-x64.zip`,url=n=>`https://github.com/${SOURCE}/releases/download/v${version}/${n}`;
+  const release={id:123,tag_name:'v'+version,prerelease:true,assets:[{name,size:bytes.length,digest:'sha256:'+digest(bytes),browser_download_url:url(name)},{name:'release-manifest.json',browser_download_url:url('release-manifest.json')}]};
+  const fetcher=async u=>new Response(u.includes('/releases?')?JSON.stringify([release]):u.endsWith('release-manifest.json')?JSON.stringify({version,files:[{name,bytes:bytes.length,sha256:digest(bytes)}]}):bytes);
+  await checkForUpdate(f.runtime,{fetcher});assert.equal((await applyPendingUpdate(f.runtime,{busy:()=>false})).state,'installed');
+  assert.equal(SetupTransaction.load(f.runtime).data.plan.release.version,version);
+  assert.equal(readJson(path.join(f.runtime,'marketplace/plugins/dsh-chat-sync/.codex-plugin/plugin.json')).version,version);
+  assert.equal(readJson(path.join(f.plan.target,'link.config.json')).updateRuntime,f.runtime);
+  assert.equal(fs.readFileSync(chat,'utf8'),'retain chat and ledger bytes');assert.equal(fs.readFileSync(readJson(f.plan.configFile).dshTokenFile,'utf8'),token);
+  const client=new Client(f.plan.native,['app-server'],{CODEX_HOME:f.home});await client.initialize();const info=await client.request('plugin/read',{marketplacePath:path.join(f.runtime,'marketplace/.agents/plugins/marketplace.json'),pluginName:'dsh-chat-sync'});assert.equal(info.plugin.summary.enabled,true);await client.close();
+  await rollbackSetup(f.runtime,{get:async()=>null,set:async()=>assert.fail('must not change startup')});
+  assert.equal(SetupTransaction.load(f.runtime).data.id,before.id);assert.equal(fs.readFileSync(chat,'utf8'),'retain chat and ledger bytes');
 });
