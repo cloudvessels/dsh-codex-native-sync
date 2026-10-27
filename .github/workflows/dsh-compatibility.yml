@@ -1,0 +1,71 @@
+name: DSH compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/dsh-plugin/**'
+      - 'scripts/test-dsh-profile.mjs'
+      - 'scripts/resolve-dsh-matrix.mjs'
+      - 'scripts/vendor/**'
+      - 'test/**'
+      - '.github/workflows/dsh-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  window:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.resolve.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/resolve-dsh-matrix.mjs > official-window.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: official-dsh-window
+          path: official-window.json
+
+  profile:
+    needs: window
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        version: ${{ fromJSON(needs.window.outputs.versions) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - name: Install exact official DSH runtime
+        env:
+          DSH_VERSION: ${{ matrix.version }}
+        shell: bash
+        run: npm install --prefix .runtime --ignore-scripts --no-audit --no-fund --no-save --registry=https://registry.npmjs.org/ "@deepseek-ai/dsh@$DSH_VERSION"
+      - name: Verify installed SDK and operation history contracts
+        env:
+          DSH_TEST_ANCHOR: ${{ github.workspace }}/.runtime/node_modules/@deepseek-ai/dsh/lib/bin.js
+          DSH_SYNC_DISABLE_UPDATES: '1'
+        run: node --test test/native-host.test.mjs test/native-title.test.mjs test/operations.test.mjs test/titles.test.mjs test/migration.test.mjs
+      - name: Install, start, append, deduplicate and restore disposable Profile
+        run: node scripts/test-dsh-profile.mjs .runtime/node_modules/@deepseek-ai/dsh/lib/bin.js > profile-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dsh-${{ matrix.version }}-${{ matrix.os }}
+          path: profile-result.json
