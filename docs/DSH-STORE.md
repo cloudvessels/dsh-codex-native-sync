@@ -1,6 +1,6 @@
 # DSH STORE 接入与验收
 
-2026-10-27 根据 [作者整改单 #1599](https://github.com/AI-Scarlett/DSH-Store/issues/1599) 核对。整改目标是修复上游安装契约；商城收录由 DSH STORE 自行复核，不因源码修复就自动视为已上架。
+2026-10-28 根据 [作者整改单 #1599](https://github.com/AI-Scarlett/DSH-Store/issues/1599) 核对。整改目标是修复上游安装契约；商城收录由 DSH STORE 自行复核，不因源码修复就自动视为已上架。
 
 ## 固定源码定位
 
@@ -38,8 +38,18 @@ Bundle 不再默认覆盖 `session-title` 的官方配置。保留已有用户�
 
 官方 npm 与 GitHub Release 在 2026-10-27 解析到的窗口为 `0.2.1-rc.2`、`0.2.1-rc.3`、`0.2.1-rc.4`。下一次检查必须重新解析，不能沿用此历史窗口。
 
-当前 manifest 将这些版本及历史 `0.2.0-rc.2` 明确记录为 `unknown`。历史 Windows 原生测试、源码结构检查和打包成功均不能充当 Linux/macOS/Windows 的新版本安装、启动、卸载、回滚矩阵。只有实际完成对应版本的验收后才更新其精确状态；范围声明不是安装授权。
+上述三版已在 Linux、macOS、Windows 各自的一次性 Profile 验收通过，manifest 分别声明 `compatible`，安装、启动、卸载和恢复原组合状态为 `passed`。历史 `0.2.0-rc.2` 仅有 Windows 原生测试，继续保留 `unknown`。范围声明不是安装授权。
 
-Windows x64 / Node 24.14.0 的一次性 Profile 已分别验证上述三版：官方 CLI 安装和配置展开、冷启动、认证 Web 页面、本插件认证 API、两条原生文字追加与去重、卸载后配置逐字恢复。零模型调用；这里的回滚指卸载恢复原组合，不代表故障升级的完整回滚。`scripts/test-dsh-profile.mjs` 可复现；新增的 `DSH compatibility` 工作流将在三个系统上解析实时窗口并重复验收，也覆盖更高的独立 next 版本。工作流通过前不将 Windows 结果泛化为全平台兼容。
+[公开 CI 验收 #5](https://github.com/cloudvessels/dsh-codex-native-sync/actions/runs/40548494828) 于 2026-10-28（北京时间）全部通过；测试源码固定为 [`47ba44c1d3c7e5e7aa503aee4c3aa2373d2cf8c9`](https://github.com/cloudvessels/dsh-codex-native-sync/tree/47ba44c1d3c7e5e7aa503aee4c3aa2373d2cf8c9)。三个系统均使用 Node 24，精确 DSH 版本从官方 npm 安装。每个任务附带 `profile-result.json`；`official-dsh-window` 工件保存当次版本解析结果。
 
-仓库源码修复、一次性 Profile 验收、商城目录收录和用户电脑安装是四个独立结果。此轮只在临时目录测试，不替换用户正在使用的 DSH/Codex，也不清理原聊天。补齐证据前不提交虚假的 `approved` 或 `compatible` 声明。
+| DSH | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| 0.2.1-rc.2 | 通过 | 通过 | 通过 |
+| 0.2.1-rc.3 | 通过 | 通过 | 通过 |
+| 0.2.1-rc.4 | 通过 | 通过 | 通过 |
+
+`scripts/test-dsh-profile.mjs` 将 manifest 声明的实际文件打包，再调用官方 CLI 安装：验证配置展开、冷启动、认证 Web 页面、本插件认证 API、两条原生文字追加与去重、零模型调用，以及卸载后配置逐字恢复。这里的回滚指卸载恢复原组合，不代表故障升级的完整回滚。矩阵还验证原生会话、标题、迁移和可选操作记录格式；这些检查不替代各系统整套 Codex 桌面同步和设置页的人工验收。此前 Windows 云端的路径/打包夹具失败已修复；只引用全部通过的本轮证据。
+
+`DSH compatibility` 工作流每次重新解析官方窗口，也覆盖更高的独立 next 版本。2026-10-28 使用 DSH STORE 自身的 `checkRepository` 对上述固定提交和 `packages/dsh-plugin` 执行只读源码预检查，结果为 `passed`，正确识别 manifest、包内 Patch、MIT 与无安装脚本；这不是安全审计或商城准入结论。
+
+仓库源码修复、一次性 Profile 验收、商城目录收录和用户电脑安装是四个独立结果。此轮只在临时目录测试，不替换用户正在使用的 DSH/Codex，也不清理原聊天。证据更新不改写现有 Release 的版本或附件；商城复检结果仍由 DSH STORE 决定。
