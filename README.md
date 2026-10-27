@@ -29,6 +29,7 @@ Windows 使用者选择带 `windows-x64` 的 Release 附件，其中附带运行
 
 | 套件源码版本 | DSH 插件 | Codex 组件 |
 |---|---|---|
+| 0.3.5-preview.1 | `dsh-codex-link` 0.1.4 | `dsh-codex-bridge` 0.3.4 |
 | 0.3.4-preview.1 | `dsh-codex-link` 0.1.3 | `dsh-codex-bridge` 0.3.3 |
 | 0.3.3-preview.1 | `dsh-codex-link` 0.1.2 | `dsh-codex-bridge` 0.3.2 |
 | 0.3.2 | `dsh-codex-link` 0.1.2 | `dsh-codex-bridge` 0.3.2 |
@@ -72,7 +73,7 @@ packages/
 ## 安装前必须知道的限制
 
 1. **需要一次性改 `CODEX_CLI_PATH`**，并**重启一次 Codex**；之后日常开关同步不再需要重启。
-2. **只同步纯文字**：不传命令、工具输出、附件。
+2. **默认只同步文字**。可选开启 Codex → DSH 的工具操作记录，会占用 DSH 上下文；不传附件或私有推理。详见[操作记录说明](docs/OPERATIONS.md)。
 3. **工作区归属按会话创建时的 `cwd` 计算**。重归属是离线维护操作，必须先正常退出 Codex；旧会话保留，迁移过程和恢复方式见 [维护说明](docs/MAINTENANCE.md)。
 4. **Codex 与 DSH 都必须在本机**，跨机器不在支持范围。
 5. **当前为公开预览版**。`setup.mjs` 已覆盖文件准备、运行库编译、配置生成和原生插件登记；另一台干净电脑的整套桌面验收仍未完成。请勿将安装状态 `ready` / `activated` 视为实际同步已通过。
@@ -111,7 +112,7 @@ node setup.mjs --runtime "$runtimeDir" --activate
 
 - `<运行目录>/last-launch.json`：应为 `mode: bridge`、`reason: ready`；
 - `<运行目录>/data/status-v2.json`：应为 `initialized: true`，各绑定的 `lastError` 为 `null`；首次聊天接入后绑定数增加；
-- DSH 设置里出现「Codex 同步」，五个开关可保存；
+- DSH 设置里出现「Codex 同步」，六个开关可保存；
 - 两端各发一句，确认另一端的原生聊天中都出现。
 
 旧 `install.mjs` 仍保留用于已有部署的单侧文件登记或设置已有运行库路径，它不会替代上述完整流程。手工维护和运行库构建见 [维护说明](docs/MAINTENANCE.md)。
@@ -121,6 +122,10 @@ node setup.mjs --runtime "$runtimeDir" --activate
 从 `0.3.4-preview.1` 起，完整安装的套件默认每 6 小时检查本项目 GitHub 新版本，自动下载 Windows 包并校验；两端退出后自动安装，下次打开使用新版。聊天过程中只缓存更新，不重启客户端。预览版会接收更新的预览版或正式版；正式版只接收正式版，不降级。
 
 可在 DSH「Codex 同步 → 自动下载并升级」关闭。旧版没有更新器，需要按安装说明手动升级这一次；只复制 DSH 插件不会给 Codex 安装更新器。状态查看、关闭方式和失败恢复见 [自动更新说明](docs/UPDATES.md)。
+
+### 可选操作同步
+
+DSH「Codex 同步 → 同步 Codex 操作步骤到 DSH」默认关闭，需要的人可自行开启。它把开启后新增的工具调用及结果追加为 DSH 原生操作步骤，不倒灌旧操作，也不会在 DSH 重新执行。文字仍双向同步，操作记录仅为 Codex → DSH。开启会增加上下文用量，关闭保留已有记录。范围、截断和维护限制见[操作记录说明](docs/OPERATIONS.md)。
 
 ---
 
