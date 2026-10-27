@@ -64,6 +64,8 @@ export async function prepare(plan,{failAfter}={}){
       const names=component==='codex-bridge'?['package.json','history.mjs','text-sync.mjs','proxy-v3.mjs','src']:['package.json','lib','src','client.js','cordis.patch.yml','link.config.example.json'];
       for(const name of names)copyTree(tx,path.join(source,name),path.join(target,name));
     }
+    for(const name of ['package.json','release.mjs','setup.mjs','installer','updater'])copyTree(tx,path.join(plan.repo,name),path.join(plan.runtime,'suite',name));
+    if(!fs.existsSync(path.join(plan.runtime,'update.json')))tx.json(path.join(plan.runtime,'update.json'),{enabled:true},{retain:true});
     const build=path.join(plan.runtime,'.setup','build-'+randomUUID()),exe=path.join(build,'Codex-DSH-Runtime.exe');fs.mkdirSync(build,{recursive:true});
     if(!plan.runtimeBinary){
       const compiled=spawnSync(plan.compiler,['/nologo','/codepage:65001','/target:exe','/reference:System.Web.Extensions.dll','/out:'+exe,path.join(bridge,'src','Runtime.cs')],{encoding:'utf8',windowsHide:true});
@@ -87,7 +89,8 @@ export async function prepare(plan,{failAfter}={}){
       proxy:path.join(bridge,'proxy-v3.mjs'),preflight:path.join(bridge,'src','runtime-preflight.mjs'),config:plan.configFile,controlFile:control});
     const dshSource=path.join(plan.runtime,'suite','packages','dsh-plugin');
     for(const name of ['package.json','lib','src','client.js','cordis.patch.yml','link.config.example.json'])copyTree(tx,path.join(dshSource,name),path.join(plan.target,name));
-    if(!fs.existsSync(path.join(plan.target,'link.config.json')))tx.json(path.join(plan.target,'link.config.json'),{bridgeConfig:plan.configFile,port:plan.port});
+    const linkFile=path.join(plan.target,'link.config.json');
+    tx.json(linkFile,{...readJson(linkFile,{bridgeConfig:plan.configFile,port:plan.port}),updateRuntime:plan.runtime});
     const manifestFile=path.join(plan.profile,'package.json'),manifest=readJson(manifestFile);
     manifest.dependencies={...manifest.dependencies,'dsh-codex-link':'link:'+plan.target.replaceAll('\\','/')};
     manifest.dsh={...manifest.dsh,profile:{...manifest.dsh?.profile,bundles:[...new Set([...(manifest.dsh?.profile?.bundles??[]),'dsh-codex-link'])]}};
