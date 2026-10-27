@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {Ledger, atomicJson, readJson, responseItem, notifications, mergeTurns, pageRows, readInjected, PREFIX, hash, codexId} from './history.mjs';
 import {REVISION, incomingMessages, persistBinding, TextOutbox} from './text-sync.mjs';
+import {OperationOutbox} from './operation-sync.mjs';
 import {loadSettings} from '../dsh-plugin/src/settings.mjs';
 import {registerBridgeOwner} from '../dsh-plugin/src/state.mjs';
 
@@ -129,7 +130,7 @@ if (!serverMode) {
     bridgeRevision: REVISION,
     runtimeVersion: "0.2.0",
     recordedAt: new Date().toISOString(),
-    syncSteps: false,
+    syncSteps: settings().syncSteps,
     settings: settings(),
     discoveryError,
     pid: process.pid,
@@ -142,6 +143,7 @@ if (!serverMode) {
       origin: s.origin,
       archived: !!s.archived,
       lastPushError: s.lastPushError,
+      lastOperationError:s.lastOperationError??null,
       loaded: s.loaded,
       active: s.active,
       committedMessages: s.ledger.committed().reduce((n, b) => n + b.messages.length, 0),
@@ -335,17 +337,34 @@ if (!serverMode) {
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => void enqueue(), config.debounceMs ?? 500); };
 
   // Forward only persisted public text. The durable outbox retries busy/offline peers.
-  const outboxes=new Map();let forwardBusy=false;
+  const outboxes=new Map(),operationBoxes=new Map();let forwardBusy=false;
   function bufferPush(){scheduleForward();}
   function scheduleForward(){void flushPush();}
+  async function flushOperations(b){
+    try{
+      let ops=operationBoxes.get(b.threadId);
+      if(!ops){ops=new OperationOutbox(b.ledger.file+'.operations.json',b.threadId);operationBoxes.set(b.threadId,ops);}
+      const options=settings();ops.scan(b.rolloutPath,options.syncSteps,options.operationEpoch,options.operationEnabledAt);
+      if(syncEnabled()&&options.syncSteps&&ops.data.pending.length){
+        const view=await dsh('/snapshot?sessionId='+encodeURIComponent(b.sessionId));
+        if(view.agentStatus!=='running')while(ops.data.pending.length&&syncEnabled()&&settings().syncSteps){
+          const steps=ops.data.pending.slice(0,100);
+          await dsh('/append-steps',{sessionId:b.sessionId,source:'codex:'+b.threadId,steps});
+          ops.forget(new Set(steps.map(s=>s.id)));
+        }
+      }
+      b.lastOperationError=null;
+    }catch(error){b.lastOperationError=error.message;}
+  }
   async function flushPush(){
     if(bootstrapOnly||closed||!initialized||forwardBusy||!syncEnabled())return;
     forwardBusy=true;
     try{
       for(const b of states){
         if(!syncEnabled())return;
-        if(b.archived||b.threadId===config.legacyForwardThreadId)continue;
+        if(b.archived)continue;
         try{
+          if(b.threadId===config.legacyForwardThreadId)continue;
           let box=outboxes.get(b.threadId);
           if(!box){box=new TextOutbox(b.ledger.file+'.forward.json',b.threadId);outboxes.set(b.threadId,box);}
           box.scan(b.rolloutPath);if(!box.data.pending.length)continue;
@@ -362,6 +381,7 @@ if (!serverMode) {
           }
           b.lastPushError=null;
         }catch(error){b.lastPushError=error.message;}
+        finally{await flushOperations(b);}
       }
     }finally{forwardBusy=false;save();}
   }

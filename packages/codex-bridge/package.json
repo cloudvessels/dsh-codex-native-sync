@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-bridge",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "description": "DSH Codex 同步套件的 Codex 配套组件，包含原生插件、运行库源码及同步代理",

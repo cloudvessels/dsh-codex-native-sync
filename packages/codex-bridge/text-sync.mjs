@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {atomicJson, readJson, PREFIX, hash, codexId} from './history.mjs';
 
-export const REVISION = '0.3.2-text-only';
+export const REVISION = '0.3.5-optional-operations';
 
 export function incomingMessages(view, sessionId, identitySessionId = sessionId) {
   if (view.targetSessionId !== sessionId) throw Error('DSH_BINDING_MISMATCH');
