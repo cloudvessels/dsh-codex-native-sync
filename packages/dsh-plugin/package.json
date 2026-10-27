@@ -4,7 +4,18 @@
   "description": "双向文字同步、可选 Codex 操作记录同步：DSH 设置页与宿主",
   "type": "module",
   "main": "./lib/index.js",
-  "files": ["lib", "src", "client.js", "cordis.patch.yml", "link.config.example.json"],
+  "files": ["lib", "src", "client.js", "cordis.patch.yml", "link.config.example.json", "README.md", "LICENSE", "SECURITY.md"],
+  "engines": {
+    "node": ">=24.0.0",
+    "dsh": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudvessels/dsh-codex-native-sync.git",
+    "directory": "packages/dsh-plugin"
+  },
+  "homepage": "https://github.com/cloudvessels/dsh-codex-native-sync#readme",
+  "bugs": {"url": "https://github.com/cloudvessels/dsh-codex-native-sync/issues"},
   "exports": {
     ".": "./lib/index.js",
     "./client": "./client.js",
@@ -12,6 +23,21 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "compatibility": {
+      "dsh": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4",
+      "dshReleases": {
+        "0.2.0-rc.2": "unknown",
+        "0.2.1-rc.2": "unknown",
+        "0.2.1-rc.3": "unknown",
+        "0.2.1-rc.4": "unknown"
+      },
+      "dshOperations": {
+        "0.2.0-rc.2": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
+        "0.2.1-rc.2": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
+        "0.2.1-rc.3": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"},
+        "0.2.1-rc.4": {"install": "unknown", "start": "unknown", "uninstall": "unknown", "rollback": "unknown"}
+      }
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
