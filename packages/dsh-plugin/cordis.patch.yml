@@ -1,0 +1,8 @@
+- id: session-title
+  config:
+    fallbackMaxWords: 5
+    fallbackMaxBytes: 40
+    maxTitleBytes: 8192
+- insert:
+    - id: codex-native-sync
+      name: dsh-codex-link
