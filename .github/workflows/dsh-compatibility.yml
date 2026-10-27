@@ -63,7 +63,12 @@ jobs:
           DSH_SYNC_DISABLE_UPDATES: '1'
         run: node --test test/native-host.test.mjs test/native-title.test.mjs test/operations.test.mjs test/titles.test.mjs test/migration.test.mjs
       - name: Install, start, append, deduplicate and restore disposable Profile
+        shell: bash
         run: node scripts/test-dsh-profile.mjs .runtime/node_modules/@deepseek-ai/dsh/lib/bin.js > profile-result.json
+      - name: Show acceptance result
+        if: always()
+        shell: bash
+        run: if [ -f profile-result.json ]; then cat profile-result.json; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
