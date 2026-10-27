@@ -25,7 +25,7 @@ node setup.mjs --profile <实际 DSH profile> --runtime <独立固定目录> --n
 
 1. 新安装的 `<运行目录>/data/status-v2.json`：`initialized: true`、`bindings > 0`、所有 binding 的 `lastError` 为 null；旧手工部署按其 `statusFile` 查找；
 2. 运行库目录下 `last-launch.json`：`"mode": "bridge"`（不是 `native`）；
-3. DSH 设置里出现「Codex 同步」，开关可保存；
+3. DSH 设置里出现「Codex 同步」，五个开关可保存；
 4. 两侧各发一句话，确认对方出现。
 
 **任一项失败即视为未安装完成**，不要向用户报告成功。
@@ -46,3 +46,7 @@ node setup.mjs --profile <实际 DSH profile> --runtime <独立固定目录> --n
 - 操作级同步默认关闭（占上下文）；
 - Codex 侧依赖未承诺稳定的协议，**升级后可能失效**；
 - 跨机器不支持。
+
+## 自动更新
+
+完整安装从 0.3.4-preview.1 起包含 GitHub 自动更新器，见 `docs/UPDATES.md`。自动下载与运行中换代码不同：客户端运行中只缓存，两端退出后安装。不得绕过活动进程检查来测试升级；测试必须使用隔离安装，真实共享库、令牌和聊天不进入发布包。
