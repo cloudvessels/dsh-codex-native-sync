@@ -6,6 +6,8 @@
 
 如果你不用 Codex，就不需要安装本项目的 DSH 插件。两个组件一起提供同步功能，Windows 安装流程见下文和安装说明。
 
+DSH STORE 应定位到子目录 `packages/dsh-plugin`，仓库根目录是配套套件，不能作为独立 DSH 插件安装。商城声明、权限与逐版本验收状态见 [DSH STORE 接入说明](docs/DSH-STORE.md)。
+
 **当前发布状态：预览版。** 已验证隔离新库中的原生双向记录、DSH 设置页和重启恢复；Codex 桌面窗口的即时刷新及其他机器组合仍待验证。请先使用测试聊天验收。
 
 Windows 使用者选择带 `windows-x64` 的 Release 附件，其中附带运行库；开发者可选源码包。[下载文件与校验说明](docs/RELEASE.md)。
