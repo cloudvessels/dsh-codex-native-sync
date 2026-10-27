@@ -27,6 +27,24 @@ const execute=promisify(execFile),report={checkedAt:new Date().toISOString(),pla
 let child,stage='baseline',baseline,installed=false,log='';
 const run=async args=>(await execute(process.execPath,[cli,...args],{cwd:root,env,windowsHide:true,timeout:240000,maxBuffer:4*1024*1024})).stdout;
 const pause=()=>new Promise(done=>setTimeout(done,250));
+async function packageArchive(){
+  // A real package payload avoids pnpm 10's Windows cross-volume file: directory
+  // resolution, and prevents undeclared developer files from making the test pass.
+  const destination=path.join(root,'package'),manifest=JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8'));
+  const copy=(from,to)=>{
+    const stat=fs.lstatSync(from);if(stat.isSymbolicLink())throw Error('symlink in test package');
+    if(stat.isDirectory()){fs.mkdirSync(to,{recursive:true});for(const name of fs.readdirSync(from))copy(path.join(from,name),path.join(to,name));}
+    else{fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);}
+  };
+  for(const file of ['package.json',...manifest.files]){
+    const from=path.resolve(source,file),relative=path.relative(source,from);
+    if(!relative||relative.startsWith('..')||path.isAbsolute(relative))throw Error('unsafe package payload path');
+    copy(from,path.join(destination,relative));
+  }
+  const archive=path.join(root,'dsh-codex-link.tgz');
+  await execute('tar',['-czf',archive,'-C',root,'package'],{cwd:root,env,windowsHide:true,timeout:30000});
+  return archive;
+}
 async function stop(){
   if(!child||child.exitCode!==null)return;
     const current=child;
@@ -34,10 +52,12 @@ async function stop(){
   await Promise.race([exited,new Promise((_,reject)=>setTimeout(()=>reject(Error('host shutdown timeout')),10000).unref())]);child=null;
 }
 try{
+  stage='package';const archive=await packageArchive();report.packagePayload='declared-files-tarball';
+  stage='baseline';
   report.dshVersion=(await run(['--version'])).trim();
   baseline=await run(['--profile','web','--dump-config']);
   stage='install';
-  await run(['plugin','--profile','web','add','--ignore-scripts','--config.auto-install-peers=false','file:'+source]);installed=true;
+  await run(['plugin','--profile','web','add','--ignore-scripts','--config.auto-install-peers=false',archive]);installed=true;
   assert.match(await run(['--profile','web','--dump-config']),/codex-native-sync/);report.install='passed';
   const server=createServer();await new Promise((done,reject)=>server.once('error',reject).listen(0,'127.0.0.1',done));
   const port=server.address().port;await new Promise(done=>server.close(done));
