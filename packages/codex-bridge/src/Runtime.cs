@@ -8,6 +8,20 @@ using System.Collections.Generic;
 class Runtime {
  static string Quote(string value){var b=new System.Text.StringBuilder("\"");int slashes=0;foreach(char c in value){if(c=='\\'){slashes++;continue;}if(c=='"'){b.Append('\\',slashes*2+1);b.Append(c);}else{b.Append('\\',slashes);b.Append(c);}slashes=0;}b.Append('\\',slashes*2);b.Append('"');return b.ToString();}
  static string Args(IEnumerable<string> args){return String.Join(" ",args.Select(Quote));}
+ static bool WaitForUpdate(string root){
+  string file=Path.Combine(root,".updates","apply.migration.lock");var until=DateTime.UtcNow.AddSeconds(60);
+  while(File.Exists(file)){
+   try{var value=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(file));var p=Process.GetProcessById(Convert.ToInt32(value["pid"]));if(p.HasExited)return true;}
+   catch(ArgumentException){return true;}catch{ return false; }
+   if(DateTime.UtcNow>until)return false;System.Threading.Thread.Sleep(200);
+  }return true;
+ }
+ static void StartUpdater(string root,Dictionary<string,object> spec){
+  if(Environment.GetEnvironmentVariable("DSH_SYNC_DISABLE_UPDATES")=="1")return;
+  try{string worker=Path.Combine(root,"suite","updater","worker.mjs");if(!File.Exists(worker))return;
+   using(var child=Process.Start(new ProcessStartInfo((string)spec["node"],Args(new[]{worker,"--runtime",root})){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true})){}
+  }catch{}
+ }
  static async Task Pump(Stream source,Stream target){byte[] buffer=new byte[8192];int count;while((count=await source.ReadAsync(buffer,0,buffer.Length))>0){await target.WriteAsync(buffer,0,count);await target.FlushAsync();}}
  static string ResolveNative(string root){
   string hint=Path.Combine(root,"native.path");if(File.Exists(hint)){string p=File.ReadAllText(hint).Trim();if(File.Exists(p)&&!String.Equals(p,System.Reflection.Assembly.GetExecutingAssembly().Location,StringComparison.OrdinalIgnoreCase))return p;}
@@ -32,7 +46,9 @@ class Runtime {
    bool server=args.Contains("app-server")&&args.Contains("--analytics-default-enabled")&&!args.Any(a=>new[]{"generate-ts","generate-json-schema","daemon","proxy","--help"}.Contains(a));
    string specFile=Path.Combine(root,"runtime.json");
    if(server&&File.Exists(specFile)){
+    if(!WaitForUpdate(root)){Console.Error.WriteLine("DSH sync: an update is still being installed; reopen Codex shortly.");return 1;}
     try{var spec=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(specFile));
+      StartUpdater(root,spec);
       if(spec.ContainsKey("home"))Environment.SetEnvironmentVariable("CODEX_HOME",(string)spec["home"]);
       if(spec.ContainsKey("config"))Environment.SetEnvironmentVariable("DSH_BRIDGE_CONFIG",(string)spec["config"]);
       if(Ready(spec,specFile,out reason)){exe=(string)spec["node"];arguments=Args(new[]{(string)spec["proxy"]}.Concat(args));mode="bridge";}}
