@@ -69,7 +69,7 @@ test('downloaded update installs both real components and native plugin, retains
   const before=SetupTransaction.load(f.runtime).data;
   const chat=path.join(f.runtime,'data','keep-chat.json');write(chat,'retain chat and ledger bytes');
   const token=fs.readFileSync(readJson(f.plan.configFile).dshTokenFile,'utf8');
-  const source=path.join(f.dir,'new-release'),version='0.3.5-preview.1';fs.mkdirSync(source);
+  const source=path.join(f.dir,'new-release'),version='999.0.0-preview.1';fs.mkdirSync(source);
   const copy=(from,to)=>{if(fs.statSync(from).isDirectory()){fs.mkdirSync(to,{recursive:true});for(const name of fs.readdirSync(from))copy(path.join(from,name),path.join(to,name));}else write(to,fs.readFileSync(from));};
   for(const name of ['package.json','release.mjs','setup.mjs','installer','updater','packages'])copy(path.join(repository,name),path.join(source,name));
   const manifest=JSON.parse(fs.readFileSync(path.join(source,'package.json')));manifest.version=version;write(path.join(source,'package.json'),JSON.stringify(manifest));

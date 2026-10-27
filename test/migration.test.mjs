@@ -8,6 +8,7 @@ import {offlineMigration,migrateBinding,recoverMigration} from '../packages/dsh-
 import {appendToLiveSession} from '../packages/dsh-plugin/src/append-v2.mjs';
 import {Ledger} from '../packages/codex-bridge/history.mjs';
 import {incomingMessages} from '../packages/codex-bridge/text-sync.mjs';
+import {appendOperations} from '../packages/dsh-plugin/src/operation-steps.mjs';
 
 async function prepare(t){
   const f=await nativeFixture(t),old='original',targetPath=path.join(f.dir,'correct-project');
@@ -18,6 +19,7 @@ async function prepare(t){
   const ledgerFile=path.join(f.dir,'ledger.json'),ledger=new Ledger(ledgerFile,'thread',old);
   ledger.stage(incomingMessages(f.snapshot(old),old));for(const batch of ledger.data.batches)ledger.commit(batch);
   atomicJson(ledgerFile+'.forward.json',{version:1,threadId:'thread',offset:123,sourceFile:'original-rollout',line:7,pending:[{id:'pending',role:'user',text:'still pending'}]});
+  atomicJson(ledgerFile+'.operations.json',{version:1,threadId:'thread',offset:456,pending:[{id:'pending-operation',name:'shell',arguments:'{}',result:'retain'}]});
   const binding={threadId:'thread',sessionId:old,ledgerFile,sourceFile:'original-rollout'},bindingsFile=path.join(f.dir,'bindings.json');
   atomicJson(f.configFile,{bindings:[binding]});atomicJson(bindingsFile,{version:2,bindings:[{threadId:'thread',sessionId:old}]});
   return {...f,old,binding,bindingsFile,targetPath,workspace:await f.ctx.workspaceRegistry.create(targetPath),ledgerFile};
@@ -33,8 +35,17 @@ test('rehome preserves native IDs, committed and pending work, and restart dedup
   const known=new Set(ledger.data.batches.flatMap(batch=>batch.messages.map(message=>message.id)));
   assert(incomingMessages(view,result.to,next.identitySessionId).every(message=>known.has(message.id)));
   assert.equal(fs.readFileSync(next.ledgerFile+'.forward.json','utf8'),fs.readFileSync(f.ledgerFile+'.forward.json','utf8'));
+  assert.equal(fs.readFileSync(next.ledgerFile+'.operations.json','utf8'),fs.readFileSync(f.ledgerFile+'.operations.json','utf8'));
   assert.equal(readJson(f.bindingsFile).bindings[0].sessionId,result.to);assert(f.archived.includes(f.old));
   f.r.validate(f.native.sessions.get(result.to).header,f.native.sessions.get(result.to).snapshotEvents(),0);
+});
+
+test('rehome refuses operation history before changing any mapping or archiving the original',{skip:!anchor},async t=>{
+  const f=await prepare(t),session=f.native.sessions.get(f.old),before=fs.readFileSync(f.configFile,'utf8');
+  appendOperations(session,{source:'codex:thread',steps:[{id:'op',name:'exec_command',arguments:'{}',result:'keep'}]},f.r.validate);
+  const sequence=session.seq;
+  await assert.rejects(offlineMigration(f.configFile,f.ctx,()=>migrateBinding({ctx:f.ctx,configFile:f.configFile,bindingsFile:f.bindingsFile,binding:f.binding,workspace:f.workspace,targetPath:f.targetPath,snapshot:f.snapshot(f.old),validate:f.r.validate})),/OPERATION_HISTORY_REHOME_UNSUPPORTED/);
+  assert.equal(session.seq,sequence);assert.equal(fs.readFileSync(f.configFile,'utf8'),before);assert(!f.archived.includes(f.old));assert.equal(f.native.sessions.list().length,1);
 });
 test('failure publishing the second mapping restores the original files before archiving the source',{skip:!anchor},async t=>{
   const f=await prepare(t),beforeConfig=fs.readFileSync(f.configFile,'utf8'),beforeBindings=fs.readFileSync(f.bindingsFile,'utf8');
