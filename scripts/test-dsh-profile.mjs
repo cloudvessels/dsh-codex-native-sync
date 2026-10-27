@@ -42,7 +42,9 @@ async function packageArchive(){
     copy(from,path.join(destination,relative));
   }
   const archive=path.join(root,'dsh-codex-link.tgz');
-  await execute('tar',['-czf',archive,'-C',root,'package'],{cwd:root,env,windowsHide:true,timeout:30000});
+  // Git Bash may put GNU tar first on Windows; a drive colon is interpreted as
+  // a remote host by that tar. Resolve the archive relative to the temp cwd.
+  await execute('tar',['-czf',path.basename(archive),'package'],{cwd:root,env,windowsHide:true,timeout:30000});
   return archive;
 }
 async function stop(){
