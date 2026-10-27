@@ -1,0 +1,28 @@
+# 密钥与机器相关配置（绝不提交）
+*.link-token
+.link-token
+**/link.config.json
+**/bindings.json
+**/config.json
+**/config-v3.json
+**/*.migration.lock
+**/*.migration-journal.json
+**/*.owners/
+codex-plugin-sync/data/
+
+# 运行时数据：会话、账本、状态、证据
+**/data/
+**/evidence/
+**/*.ndjson
+**/*.jsonl
+**/*.log
+
+# 依赖与构建产物
+node_modules/
+package-lock.json
+
+# 系统
+Thumbs.db
+.DS_Store
+dist/
+artifacts/
