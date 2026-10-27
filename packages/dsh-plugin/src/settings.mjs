@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {atomicJson, readJson} from './state.mjs';
 
-export const SWITCHES = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror'];
+export const SWITCHES = ['enabled', 'autoBind', 'reverseBind', 'archiveMirror', 'autoUpdate'];
 export function normalizeSettings(value = {}) {
   return {enabled: value.enabled !== false, autoBind: value.autoBind !== false,
-    reverseBind: value.reverseBind === true, archiveMirror: value.archiveMirror === true, syncSteps: false};
+    reverseBind: value.reverseBind === true, archiveMirror: value.archiveMirror === true, autoUpdate:value.autoUpdate !== false, syncSteps: false};
 }
 export function settingsPath(configPath) {
   return path.join(path.dirname(configPath), 'data', 'settings.json');

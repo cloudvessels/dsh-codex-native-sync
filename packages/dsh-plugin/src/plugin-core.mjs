@@ -61,7 +61,7 @@ export async function apply(ctx, options = {}) {
   let listeningPort=config.port;
   const pushed = new Map(); // sessionId -> {count, lastAt, lastError}
 
-  const state = () => ({version: 3, pluginVersion: '0.1.2', settings: settings(), syncSteps: false, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
+  const state = () => ({version: 3, pluginVersion: '0.1.3', settings: settings(), syncSteps: false, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
 
   const save = () => {
     try { fs.writeFileSync(path.join(root, 'sync-status.json'), JSON.stringify({...state(), pushed: Object.fromEntries(pushed)}, null, 2)); } catch {}
