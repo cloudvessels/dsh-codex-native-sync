@@ -58,6 +58,17 @@ try{
   stage='baseline';
   report.dshVersion=(await run(['--version'])).trim();
   baseline=await run(['--profile','web','--dump-config']);
+  const manifest=JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8'));
+  if(manifest.dsh?.compatibility?.dshReleases?.[report.dshVersion]==='incompatible'){
+    stage='incompatible-install';
+    let rejection;
+    try{await run(['plugin','--profile','web','add','--ignore-scripts','--config.auto-install-peers=false',archive]);installed=true;}
+    catch(error){rejection=error;}
+    assert(rejection,'declared incompatible target must refuse installation');
+    assert.match(String(rejection.stderr??'')+String(rejection.stdout??''),/not compatible|incompatible/i);
+    assert.equal(await run(['--profile','web','--dump-config']),baseline,'rejected install must restore baseline');
+    Object.assign(report,{compatibility:'incompatible',install:'rejected-as-declared',start:'not-run',uninstall:'not-needed',rollback:'passed',rollbackMethod:'rejected-install-restores-baseline',rejectionVerified:true});
+  }else{
   stage='install';
   await run(['plugin','--profile','web','add','--ignore-scripts','--config.auto-install-peers=false',archive]);installed=true;
   assert.match(await run(['--profile','web','--dump-config']),/codex-native-sync/);report.install='passed';
@@ -97,6 +108,7 @@ try{
   assert.deepEqual((await post('/snapshot?sessionId='+encodeURIComponent(sessionId))).messages.map(row=>row.role),['user','assistant']);
   assert.equal((await post('/status')).modelRequests,0);
   report.start='passed';report.nativeTextAndDedup='passed';report.modelRequests=0;
+  }
 }catch(error){
   report.failedStage=stage;report.reason=error.message.slice(0,300);
   if(stage==='install')report.install='failed';if(stage==='start')report.start='failed';
