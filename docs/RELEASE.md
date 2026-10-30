@@ -1,11 +1,11 @@
 # 发布与下载
 
-当前预览版本为 `0.3.6-preview.1`，提供以下附件：
+当前预览版本为 `0.3.7-preview.1`，提供以下附件：
 
 | 文件 | 适用场景 |
 |---|---|
-| `dsh-codex-native-sync-0.3.6-preview.1-windows-x64.zip` | Windows x64 使用者；包含源码及已编译的同步运行库 |
-| `dsh-codex-native-sync-0.3.6-preview.1-source.zip` | 开发者；本机编译运行库 |
+| `dsh-codex-native-sync-0.3.7-preview.1-windows-x64.zip` | Windows x64 使用者；包含源码及已编译的同步运行库 |
+| `dsh-codex-native-sync-0.3.7-preview.1-source.zip` | 开发者；本机编译运行库 |
 | `SHA256SUMS.txt` | 核对两个压缩包的 SHA-256 摘要 |
 | `release-manifest.json` | 文件版本、大小与摘要清单 |
 
@@ -14,7 +14,7 @@
 压缩包校验示例：
 
 ```powershell
-Get-FileHash .\dsh-codex-native-sync-0.3.6-preview.1-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\dsh-codex-native-sync-0.3.7-preview.1-windows-x64.zip -Algorithm SHA256
 ```
 
 维护者构建发布包：先确保源码已提交、工作区干净，再在 Windows 使用 Node.js 24 运行：
@@ -27,4 +27,4 @@ node scripts/build-release.mjs --out .\dist
 
 此预览版已通过隔离自动化和 DSH 原生界面验收；Codex 桌面窗口刷新及更多机器组合仍待验证。请先接入测试聊天再用于正式项目。许可为 MIT。
 
-本版修复 DSH 混合消息中的公开文字漏同步；历史漏掉的文字会按原消息 ID 补入。可选 Codex → DSH 操作记录开关保持默认关闭，见[操作记录说明](OPERATIONS.md)。GitHub 自动更新从 0.3.4-preview.1 起提供，见[自动更新说明](UPDATES.md)；更早版本需要手动升级一次。
+本版修复历史查询阻塞新版 Codex 启动请求的问题，并保留此前 DSH 混合消息公开文字漏同步修复。大型聊天去重扫描覆盖完整文件，读取失败时保留待处理消息并报告错误。可选 Codex → DSH 操作记录开关保持默认关闭，见[操作记录说明](OPERATIONS.md)。GitHub 自动更新从 0.3.4-preview.1 起提供，见[自动更新说明](UPDATES.md)；更早版本需要手动升级一次。
