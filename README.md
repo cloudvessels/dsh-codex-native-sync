@@ -31,6 +31,7 @@ Windows 使用者选择带 `windows-x64` 的 Release 附件，其中附带运行
 
 | 套件源码版本 | DSH 插件 | Codex 组件 |
 |---|---|---|
+| 0.3.7-preview.1 | `dsh-codex-link` 0.1.5 | `dsh-codex-bridge` 0.3.7-preview.1 |
 | 0.3.6-preview.1 | `dsh-codex-link` 0.1.5 | `dsh-codex-bridge` 0.3.4 |
 | 0.3.5-preview.1 | `dsh-codex-link` 0.1.4 | `dsh-codex-bridge` 0.3.4 |
 | 0.3.4-preview.1 | `dsh-codex-link` 0.1.3 | `dsh-codex-bridge` 0.3.3 |
