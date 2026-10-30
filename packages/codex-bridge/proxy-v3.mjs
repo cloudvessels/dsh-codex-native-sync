@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {Ledger, atomicJson, readJson, responseItem, notifications, mergeTurns, pageRows, readInjected, PREFIX, hash, codexId} from './history.mjs';
 import {REVISION, incomingMessages, persistBinding, TextOutbox} from './text-sync.mjs';
 import {OperationOutbox} from './operation-sync.mjs';
+import {TurnCache} from './turn-cache.mjs';
 import {loadSettings} from '../dsh-plugin/src/settings.mjs';
 import {registerBridgeOwner} from '../dsh-plugin/src/state.mjs';
 
@@ -122,7 +123,8 @@ if (!serverMode) {
   const desktopPending = new Map();
   let serial = 0, initialized = false, closed = false, chain = Promise.resolve(), timer, watcher;
   const debugFile = path.join(root, 'data', 'bridge-v2-debug.log');
-  const debug = entry => { try { if (fs.existsSync(debugFile) && fs.statSync(debugFile).size > 4 * 1024 * 1024) fs.truncateSync(debugFile, 0); fs.appendFileSync(debugFile, new Date().toISOString() + ' ' + JSON.stringify(entry) + '\n'); } catch {} };
+  const TRACE = process.env.DSH_BRIDGE_TRACE === '1';
+  const debug = entry => { try { fs.mkdirSync(path.dirname(debugFile),{recursive:true}); if (fs.existsSync(debugFile) && fs.statSync(debugFile).size > 4 * 1024 * 1024) fs.truncateSync(debugFile, 0); fs.appendFileSync(debugFile, new Date().toISOString() + ' ' + JSON.stringify(entry) + '\n'); } catch {} };
   const output = x => process.stdout.write(JSON.stringify(x) + '\n');
 
   const state = () => ({
@@ -166,7 +168,9 @@ if (!serverMode) {
     });
   }
 
+  const nativeTurnsCache = new TurnCache();
   async function allNativeTurns(binding) {
+    return nativeTurnsCache.get(binding.threadId, async () => {
     let rows = [], cursor = null;
     do {
       const p = await request('thread/turns/list', {threadId: binding.threadId, limit: 100, sortDirection: 'asc', itemsView: 'full', ...(cursor ? {cursor} : {})});
@@ -176,6 +180,7 @@ if (!serverMode) {
       if (rows.length > 20000) throw Error('HISTORY_TOO_LARGE');
     } while (cursor);
     return rows;
+    });
   }
 
   async function decorateRequest(x) {
@@ -237,7 +242,10 @@ if (!serverMode) {
       }
       const token = fs.readFileSync(config.dshTokenFile, 'utf8').trim();
       const response = await fetch(config.dshUrl + '/snapshot?sessionId=' + encodeURIComponent(binding.sessionId), {method: 'POST', headers: {authorization: 'Bearer ' + token}, body: '{}', signal: AbortSignal.timeout(4000)});
-      if (!response.ok) throw Error('DSH_SNAPSHOT_' + response.status);
+      if (!response.ok) {
+        const bodyText = await response.text().catch(() => '');
+        throw Error('DSH_SNAPSHOT_' + response.status + (bodyText ? ' ' + bodyText.slice(0,120) : ''));
+      }
       const view = await response.json();
       if (!syncEnabled() || binding.active || view.agentStatus === 'running') return;
       const messages = incomingMessages(view, binding.sessionId, binding.identitySessionId);
@@ -264,10 +272,10 @@ if (!serverMode) {
           catch (error) { throw Error('THREAD_LOAD_FAILED: ' + error.message); }
         }
         if (!Object.hasOwn(batch, 'anchorTurnId')) { const native = binding.rolloutPath && fs.existsSync(binding.rolloutPath) ? await allNativeTurns(binding) : []; batch.anchorTurnId = native.at(-1)?.id ?? null; binding.ledger.save(); }
-        const present = readInjected(binding.rolloutPath, new Set(batch.messages.map(m => m.id)));
+        const present = await readInjected(binding.rolloutPath, new Set(batch.messages.map(m => m.id)));
         const missing = batch.messages.filter(m => !present.has(m.id));
         if(!syncEnabled()||binding.active)return;
-        if (missing.length) await request('thread/inject_items', {threadId: binding.threadId, items: missing.map(responseItem)});
+        if (missing.length) { await request('thread/inject_items', {threadId: binding.threadId, items: missing.map(responseItem)}); nativeTurnsCache.invalidate(binding.threadId); }
         binding.ledger.commit(batch);
         for (const n of notifications(binding.threadId, batch)) output(n);
         binding.delivered += batch.messages.length;
@@ -403,12 +411,14 @@ if (!serverMode) {
   const input = readline.createInterface({input: process.stdin, crlfDelay: Infinity});
   input.on('line', line => {
     let x; try { x = JSON.parse(line); } catch { child.stdin.write(line + '\n'); return; }
-    chain = chain.then(() => desktop(x)).catch(error => { save(); });
+    if (TRACE) debug({t:'in',id:x.id??null,m:x.method??null,at:Date.now()});
+    void desktop(x).catch(error => { save(); });
   });
 
   const backend = readline.createInterface({input: child.stdout, crlfDelay: Infinity});
   backend.on('line', line => {
     let x; try { x = JSON.parse(line); } catch { process.stdout.write(line + '\n'); return; }
+    if (TRACE) debug({t:'res',id:x.id??null,m:x.method??null,at:Date.now()});
     const internal = pending.get(String(x.id));
     if (x.id != null && internal) { clearTimeout(internal.timeout); pending.delete(String(x.id)); if (x.error) internal.reject(Error(JSON.stringify(x.error))); else internal.resolve(x.result); return; }
     if (String(x.id ?? '').startsWith('dshbridge-internal-')) return;
@@ -431,6 +441,7 @@ if (!serverMode) {
         if (x.error && ['turn/start', 'turn/addUserMessage', 'review/start'].includes(original.method)) binding.active = false;
       }
     }
+    if (x.params?.threadId && ['turn/started','turn/completed','item/completed','thread/compacted','thread/reverted'].includes(x.method)) nativeTurnsCache.invalidate(x.params.threadId);
     const notifyBinding = byThread.get(x.params?.threadId);
     if (notifyBinding) {
       if (x.method === 'turn/started') { notifyBinding.active = true; save(); }

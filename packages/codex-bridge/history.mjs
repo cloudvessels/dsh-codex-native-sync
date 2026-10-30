@@ -14,6 +14,9 @@ export function shrinkInjectedIds(rolloutFile,ledgerFile){
  if(!ledger?.batches)return {changed:0};
  for(const b of ledger.batches)for(const m of b.messages??[])if(typeof m.id==='string'&&m.id.length>MAX_ID)map.set(m.id,m.id.slice(0,MAX_ID));
  if(!map.size)return {changed:0};
+ let size=0;try{size=fs.statSync(rolloutFile).size;}catch{return {changed:map.size,rollout:false};}
+ // Never truncate ledger ids without rewriting the rollout that holds the originals.
+ if(size>64*1024*1024)return {changed:0,rollout:false,skipped:'ROLLOUT_TOO_LARGE',ledgerUntouched:true};
  for(const b of ledger.batches)for(const m of b.messages??[])if(map.has(m.id))m.id=map.get(m.id);
  atomicJson(ledgerFile,ledger);
  let text='';
@@ -88,10 +91,31 @@ export function pageRows(rows,params,scope){
  const data=rows.slice(start,start+limit),cursorFor=id=>'dshpage:'+Buffer.from(JSON.stringify({scope,id})).toString('base64url');
  return {data,nextCursor:start+limit<rows.length&&data.length?cursorFor(data.at(-1).item?.id??data.at(-1).id):null,backwardsCursor:data.length?cursorFor(data[0].item?.id??data[0].id):null};
 }
-export function readInjected(file,ids){
- const found=new Map();if(!file||!fs.existsSync(file))return found;
- // Read only complete records from the owning backend's rollout; never write it.
- const text=fs.readFileSync(file,'utf8'),end=text.lastIndexOf('\n');
- for(const line of text.slice(0,end).split('\n')){if(!line)continue;const x=JSON.parse(line),p=x.payload;if(x.type!=='response_item'||p?.type!=='message'||!ids.has(p.id))continue;const value={role:p.role,text:(p.content??[]).map(b=>b.text??'').join('')};const old=found.get(p.id);if(old&&(old.role!==value.role||old.text!==value.text))throw Error('ROLL_OUT_ID_CONFLICT');found.set(p.id,value);}
+export async function readInjected(file,ids){
+ const found=new Map();if(!file||!fs.existsSync(file)||!ids.size)return found;
+ // Scan the entire file without allocating a string the size of the rollout.
+ // An oversized record fails closed: never mistake an incomplete scan for missing IDs.
+ const maxRecord=32*1024*1024, chunks=[];let bytes=0;
+ const record=()=>{
+  if(!bytes)return;
+  const line=Buffer.concat(chunks,bytes).toString('utf8');chunks.length=0;bytes=0;
+  const x=JSON.parse(line),p=x.payload;
+  if(x.type!=='response_item'||p?.type!=='message'||!ids.has(p.id))return;
+  const value={role:p.role,text:(p.content??[]).map(b=>b.text??'').join('')},old=found.get(p.id);
+  if(old&&(old.role!==value.role||old.text!==value.text))throw Error('ROLL_OUT_ID_CONFLICT');
+  found.set(p.id,value);
+ };
+ for await(const chunk of fs.createReadStream(file,{highWaterMark:256*1024})){
+  let start=0;
+  while(start<chunk.length){
+   const newline=chunk.indexOf(10,start),end=newline<0?chunk.length:newline;
+   const part=chunk.subarray(start,end);bytes+=part.length;
+   if(bytes>maxRecord)throw Error('INJECTION_SCAN_RECORD_TOO_LARGE');
+   if(part.length)chunks.push(part);
+   if(newline<0)break;
+   record();start=newline+1;
+  }
+ }
+ // A writer may still be completing the final JSONL row. Only complete rows count.
  return found;
 }
