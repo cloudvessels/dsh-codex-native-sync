@@ -27,4 +27,9 @@ jobs:
       - name: Run portable bridge and installer regression tests
         env:
           DSH_SYNC_DISABLE_UPDATES: '1'
-        run: node --test test/*.test.mjs
+        shell: bash
+        run: node --test --test-reporter=tap test/*.test.mjs > bridge-tests.log 2>&1
+      - name: Publish test diagnostics in the job summary
+        if: always()
+        shell: bash
+        run: cat bridge-tests.log >> "$GITHUB_STEP_SUMMARY"
