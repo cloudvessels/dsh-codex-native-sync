@@ -19,6 +19,14 @@ test('history cache coalesces concurrent reads and invalidates in-flight or fail
  assert.deepEqual(await cache.get('b',async()=>['retry']),['retry']);
 });
 
+test('unused cached histories are released after the TTL without another request',async()=>{
+ const cache=new TurnCache({ttl:5});
+ await cache.get('idle',async()=>['retained history']);
+ assert.equal(cache.entries.size,1);
+ await new Promise(resolve=>setTimeout(resolve,20));
+ assert.equal(cache.entries.size,0);
+});
+
 test('held history requests do not block desktop authentication IDs and share one native read',async t=>{
  const f=fixture(t),configFile=path.join(f.dir,'bridge.json');
  write(path.join(f.dir,'app-server'),`const rl=require('node:readline').createInterface({input:process.stdin});let held=[],reads=0;

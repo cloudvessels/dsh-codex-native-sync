@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {crc32} from 'node:zlib';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fixture,write} from './support.mjs';
@@ -11,8 +11,16 @@ import {unpackWindowsBundle} from '../updater/archive.mjs';
 function bundle(t){
   const f=fixture(t),runtime=path.join(f.dir,'runtime'),version='0.3.4-preview.1',source=path.join(f.dir,'source');
   write(path.join(source,'package.json'),JSON.stringify({version}));write(path.join(source,'payload.txt'),'public program only');
-  const archive=path.join(f.dir,'bundle.zip');const tar=spawnSync('tar',['-a','-cf',archive,'-C',source,'.'],{encoding:'utf8',windowsHide:true});assert.equal(tar.status,0,tar.stderr);
-  const bytes=fs.readFileSync(archive),name=`dsh-codex-native-sync-${version}-windows-x64.zip`,url=file=>`https://github.com/${SOURCE}/releases/download/v${version}/${file}`;
+  // Generate an actual ZIP independently of GNU/BSD tar and shell PATH.
+  const locals=[],central=[];let offset=0;
+  for(const file of ['package.json','payload.txt']){
+    const name=Buffer.from(file),data=fs.readFileSync(path.join(source,file)),sum=crc32(data);
+    const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50);local.writeUInt16LE(20,4);local.writeUInt32LE(sum,14);local.writeUInt32LE(data.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(name.length,26);
+    const directory=Buffer.alloc(46);directory.writeUInt32LE(0x02014b50);directory.writeUInt16LE(20,4);directory.writeUInt16LE(20,6);directory.writeUInt32LE(sum,16);directory.writeUInt32LE(data.length,20);directory.writeUInt32LE(data.length,24);directory.writeUInt16LE(name.length,28);directory.writeUInt32LE(offset,42);
+    locals.push(local,name,data);central.push(directory,name);offset+=local.length+name.length+data.length;
+  }
+  const directory=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(2,8);end.writeUInt16LE(2,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);
+  const bytes=Buffer.concat([...locals,directory,end]),name=`dsh-codex-native-sync-${version}-windows-x64.zip`,url=file=>`https://github.com/${SOURCE}/releases/download/v${version}/${file}`;
   const release={id:42,tag_name:'v'+version,prerelease:true,draft:false,assets:[{name,size:bytes.length,digest:'sha256:'+digest(bytes),browser_download_url:url(name)},{name:'release-manifest.json',browser_download_url:url('release-manifest.json')}]};
   const manifest={version,files:[{name,bytes:bytes.length,sha256:digest(bytes)}]};
   const config=path.join(runtime,'data','config.json');
