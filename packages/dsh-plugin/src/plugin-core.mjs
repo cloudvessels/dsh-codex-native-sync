@@ -12,6 +12,7 @@ import {linkConfiguration,runtimeAnchor} from './configuration.mjs';
 import {loadSettings} from './settings.mjs';
 import {syncBoundTitles,sessionTitle} from './title-sync.mjs';
 import {offlineMigration,recoverMigration,migrateBinding} from './migration.mjs';
+import {publicTextMessage} from './public-text.mjs';
 
 export const name = 'dsh-multi-chat-link';
 export const inject = ['sessionController', 'sessions', 'agents', 'sessionPersistence', 'workspaceRegistry', 'sessionTitle'];
@@ -62,7 +63,7 @@ export async function apply(ctx, options = {}) {
   let listeningPort=config.port;
   const pushed = new Map(); // sessionId -> {count, lastAt, lastError}
 
-  const state = () => ({version: 3, pluginVersion: '0.1.4', settings: settings(), syncSteps: settings().syncSteps, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
+  const state = () => ({version: 3, pluginVersion: '0.1.5', settings: settings(), syncSteps: settings().syncSteps, sourceThreadId:threadId||null, targetSessionId: legacySessionId, title, workspaceId, port:listeningPort, pid: process.pid, bindings: bindings.size, ready, ...legacy});
 
   const save = () => {
     try { fs.writeFileSync(path.join(root, 'sync-status.json'), JSON.stringify({...state(), pushed: Object.fromEntries(pushed)}, null, 2)); } catch {}
@@ -100,7 +101,7 @@ export async function apply(ctx, options = {}) {
     const messages = view.events.flatMap(e => {
       const m = e.type === 'user/message' ? e.data : e.type === 'assistant/message' ? e.data.message : null;
       if (m?.role === 'user' && m.source?.kind !== 'user') return [];
-      return m ? [{id: m.id, role: m.role, text: m.content.filter(b => b.type === 'text').map(b => b.text).join(''), seq: e.seq, time: e.time, contentTypes: m.content.map(b => b.type)}] : [];
+      return m ? [publicTextMessage(m, e)] : [];
     });
     return {
       targetSessionId: sessionId,
