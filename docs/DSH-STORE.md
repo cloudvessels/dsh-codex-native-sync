@@ -36,6 +36,14 @@ Bundle 不再默认覆盖 `session-title` 的官方配置。保留已有用户�
 
 ## 逐版本证据
 
+### 2026-10-30 发布复核
+
+实时官方窗口已变为 `0.2.1-rc.4`、`0.2.1-rc.5`、`0.2.2-alpha.2`。[公开验收 #8](https://github.com/cloudvessels/dsh-codex-native-sync/actions/runs/41025028175) 在 Linux、macOS、Windows 上确认 rc.4、rc.5 的安装、启动、文字追加去重、卸载及原组合恢复均通过，rc.5 已补入精确兼容声明。
+
+alpha.2 在临时允许该版本进行探测后，三个系统均可安装，但原生快照调用失败：`ctx.sessionController.inspect is not a function`。卸载和恢复原组合通过。该版明确声明 `incompatible`，正式安装范围排除它；其 `dshOperations` 保留上述探测结果，不把安装成功解释为运行兼容。后续 CI 对明确不兼容目标验证官方 CLI 拒绝安装并恢复原配置，输出 `rejected-as-declared` / `not-run`；这类通过表示拒绝机制有效，不能当作插件运行验收通过。
+
+### 历史窗口验收
+
 官方 npm 与 GitHub Release 在 2026-10-27 解析到的窗口为 `0.2.1-rc.2`、`0.2.1-rc.3`、`0.2.1-rc.4`。下一次检查必须重新解析，不能沿用此历史窗口。
 
 上述三版已在 Linux、macOS、Windows 各自的一次性 Profile 验收通过，manifest 分别声明 `compatible`，安装、启动、卸载和恢复原组合状态为 `passed`。历史 `0.2.0-rc.2` 仅有 Windows 原生测试，继续保留 `unknown`。范围声明不是安装授权。
