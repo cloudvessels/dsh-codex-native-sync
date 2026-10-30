@@ -1,13 +1,13 @@
 {
   "name": "dsh-codex-sync-workspace",
-  "version": "0.3.5-preview.1",
+  "version": "0.3.6-preview.1",
   "private": true,
   "type": "module",
   "description": "Codex 与 DSH 原生聊天同步套件，单仓库维护两个配套组件",
   "workspaces": ["packages/dsh-plugin", "packages/codex-bridge"],
   "scripts": {"test": "node --test test/*.test.mjs"},
   "syncComponents": [
-    {"path": "packages/dsh-plugin", "name": "dsh-codex-link", "version": "0.1.4"},
+    {"path": "packages/dsh-plugin", "name": "dsh-codex-link", "version": "0.1.5"},
     {"path": "packages/codex-bridge", "name": "dsh-codex-bridge", "version": "0.3.4"}
   ]
 }
