@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-link",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "双向文字同步、可选 Codex 操作记录同步：DSH 设置页与宿主",
   "type": "module",
   "main": "./lib/index.js",
