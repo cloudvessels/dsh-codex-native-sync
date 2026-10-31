@@ -9,6 +9,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {readRelease} from '../release.mjs';
 import {readJson,processAlive,assertBridgeOffline,acquireBindingLock} from '../packages/dsh-plugin/src/state.mjs';
 import {PLUGIN_ID} from '../packages/codex-bridge/src/activation.mjs';
+import {resolveNativeCli} from '../packages/codex-bridge/src/native-cli.mjs';
 import {SetupTransaction} from './transaction.mjs';
 import {NativeClient} from './rpc.mjs';
 
@@ -22,7 +23,7 @@ export function createPlan(options){
   const contains=(base,target)=>{const relative=path.relative(base,target);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
   if(contains(repo,runtime)||contains(runtime,repo))throw Error('运行目录与源码仓库不能相互包含，请选择独立的固定目录');
   const manifest=readJson(path.join(profile,'package.json'),null);if(!manifest)throw Error('DSH profile 不存在：'+profile);
-  const native=requiredFile(options.native),node=requiredFile(options.node??process.execPath);
+  const native=requiredFile(resolveNativeCli(options.native)),node=requiredFile(options.node??process.execPath);
   const bundled=path.join(repo,'artifacts','windows-x64','Codex-DSH-Runtime.exe');
   const runtimeBinary=options.runtimeBinary??(fs.existsSync(bundled)?bundled:null);
   const compiler=runtimeBinary?null:requiredFile(options.compiler??compilerDefault());
@@ -77,8 +78,10 @@ export async function prepare(plan,{failAfter}={}){
     const old=readJson(plan.configFile,null);
     const config=old??{bindings:[],nativeCli:plan.native,dshUrl:'http://127.0.0.1:'+plan.port,dshTokenFile:token,
       statusFile:path.join(data,'status-v2.json'),watchDir:data,ledgerDir:path.join(data,'ledgers'),pluginControlFile:defaultControl,
-      codexStateDb:path.join(plan.home,'state_5.sqlite'),pluginPort:plan.pluginPort,discoveryMs:5000,reconcileMs:1000,forwardMs:1000,debounceMs:250};
-    if(old&&(old.nativeCli!==plan.native||old.dshUrl!=='http://127.0.0.1:'+plan.port))throw Error('已有配置与本次原生程序/端口不同；请先核对，不会覆盖');
+      codexStateDb:path.join(plan.home,'state_5.sqlite'),pluginPort:plan.pluginPort,discoveryMs:5000,reconcileMs:1000,forwardMs:1000,debounceMs:250,startupGraceMs:20000};
+    const rotated=old&&old.nativeCli!==plan.native&&!fs.existsSync(old.nativeCli??'')&&path.resolve(resolveNativeCli(old.nativeCli))===path.resolve(plan.native);
+    if(old&&((old.nativeCli!==plan.native&&!rotated)||old.dshUrl!=='http://127.0.0.1:'+plan.port))throw Error('已有配置与本次原生程序/端口不同；请先核对，不会覆盖');
+    if(rotated){config.nativeCli=plan.native;tx.json(plan.configFile,config,{retain:true});}
     const control=config.pluginControlFile??defaultControl;
     // The shared library may acquire live bindings after setup. Rollback must
     // retain its configuration, token and controls along with chat/ledger data.
@@ -98,8 +101,9 @@ export async function prepare(plan,{failAfter}={}){
     const market=path.join(plan.runtime,'marketplace'),plugin=path.join(market,'plugins','dsh-chat-sync');
     tx.json(path.join(plugin,'.codex-plugin','plugin.json'),{name:'dsh-chat-sync',version:plan.release.version,description:'Codex 与 DSH 原生聊天的本地文字同步',requires_local_executor:true,mcpServers:'./.mcp.json',
       interface:{displayName:'DSH 聊天同步',shortDescription:'与 DSH 自动同步聊天文字',capabilities:['Read','Write'],category:'Productivity'}});
-    tx.json(path.join(plugin,'.mcp.json'),{mcpServers:{dsh_chat_sync:{command:plan.node,args:[path.join(bridge,'src','server.mjs')],
-      env:{DSH_SYNC_PROJECT:path.join(plan.runtime,'suite'),DSH_SYNC_CONFIG:plan.configFile,DSH_SYNC_DATA:path.join(data,'mcp')},startup_timeout_sec:10,default_tools_approval_mode:'approve'}}});
+    // Background sync is owned by the bridge, not an MCP handshake on app boot.
+    // Replace only this suite's generated definition; rollback retains its backup.
+    tx.json(path.join(plugin,'.mcp.json'),{mcpServers:{}});
     tx.json(path.join(market,'.agents','plugins','marketplace.json'),{name:'dsh-local-sync',interface:{displayName:'DSH 本地聊天同步'},plugins:[{name:'dsh-chat-sync',source:{source:'local',path:'./plugins/dsh-chat-sync'},policy:{installation:'AVAILABLE',authentication:'ON_INSTALL'},category:'Productivity'}]});
     if(failAfter==='files')throw Error('INJECTED_PREPARE_FAILURE');
     tx.data.state='ready';tx.save();return {state:'ready',version:plan.release.version,record:tx.file,runtime:plan.runtime,requiresActivation:true};
@@ -137,7 +141,7 @@ async function activateLocked(runtime,{environment,startup}){
     const after=await client.request('config/read',{includeLayers:false});
     if(!isDeepStrictEqual(unrelated(before.config),unrelated(after.config))){tx.track(configFile).keepOnRollback=true;throw Error('检测到其他配置变化，保留当前配置等待核对');}
     const info=await client.request('plugin/read',{marketplacePath:marketFile,pluginName:'dsh-chat-sync'});
-    if(!info.plugin.summary.installed||!info.plugin.summary.enabled||!info.plugin.mcpServers.includes('dsh_chat_sync'))throw Error('原生插件登记未通过验证');
+    if(!info.plugin.summary.installed||!info.plugin.summary.enabled||info.plugin.mcpServers.length!==0)throw Error('原生插件登记未通过验证');
     if(startup){tx.data.environment={before:tx.data.environment?tx.data.environment.before:previous,after:cliPath};tx.save();await environment.set(cliPath);if(await environment.get()!==cliPath)throw Error('启动路径写后核对失败');}
     tx.data.state='activated';tx.data.startupChanged=startup;tx.save();return {state:'activated',pluginId:PLUGIN_ID,startupChanged:startup,desktopVerified:false};
   }catch(error){await client?.close();client=null;await tx.rollback(environment);throw error;}
