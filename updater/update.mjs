@@ -6,6 +6,7 @@ import {pathToFileURL} from 'node:url';
 import {readJson,atomicJson,processAlive,assertBridgeOffline,acquireBindingLock} from '../packages/dsh-plugin/src/state.mjs';
 import {loadSettings} from '../packages/dsh-plugin/src/settings.mjs';
 import {unpackWindowsBundle} from './archive.mjs';
+import {resolveNativeCli} from '../packages/codex-bridge/src/native-cli.mjs';
 
 export const SOURCE='cloudvessels/dsh-codex-native-sync';
 export const digest=data=>createHash('sha256').update(data).digest('hex');
@@ -88,7 +89,7 @@ export async function applyPendingUpdate(runtime,{busy=clientsRunning,install}={
       // All archives, paths and byte hashes have been checked before executing
       // the updater/installer shipped by the one configured upstream repository.
       const setup=await import(pathToFileURL(path.join(source,'installer','setup.mjs')).href);
-      const old=prior.plan,newPlan=setup.createPlan({repository:source,profile:old.profile,runtime,home:old.home,native:old.native,node:old.node,port:old.port,pluginPort:old.pluginPort});
+      const old=prior.plan,newPlan=setup.createPlan({repository:source,profile:old.profile,runtime,home:old.home,native:resolveNativeCli(old.native),node:old.node,port:old.port,pluginPort:old.pluginPort});
       await setup.prepare(newPlan);
       if(prior.state==='activated')await setup.activate(runtime,{startup:false});
     }
