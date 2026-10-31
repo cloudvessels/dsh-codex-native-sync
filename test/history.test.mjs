@@ -17,6 +17,12 @@ test('durable identity deduplication and conflicts',()=>{const root=fs.mkdtempSy
 test('display keeps both roles and independent assistants',()=>{const t=visibleTurn({turnId:'x',acceptedAt:1000,messages:[user,assistant,{...assistant,id:'a2'}]});assert.deepEqual(t.items.map(x=>x.type),['userMessage','agentMessage','agentMessage']);assert.equal(t.status,'completed');});
 test('anchor keeps external turn before the next native turn in same second',()=>{const native=[{id:'n1',startedAt:5},{id:'n2',startedAt:5}];const b={turnId:'dsh',anchorTurnId:'n1'};assert.deepEqual(mergeTurns(native,[{id:'dsh',startedAt:5}],'asc',[b]).map(x=>x.id),['n1','dsh','n2']);});
 test('pagination has no missing or duplicate rows in either direction',()=>{const rows=Array.from({length:7},(_,i)=>({id:'t'+i}));for(const direction of ['asc','desc']){const ordered=direction==='asc'?rows:[...rows].reverse();let cursor=null,all=[];do{const page=pageRows(ordered,{limit:2,cursor,sortDirection:direction},'scope');all.push(...page.data);cursor=page.nextCursor;}while(cursor);assert.deepEqual(all,ordered);}const p=pageRows(rows,{limit:1},'x');assert.throws(()=>pageRows(rows,{cursor:p.nextCursor},'y'),/SCOPE/);});
+test('backwards cursors include their anchor when changing direction, while item anchors remain exclusive',()=>{
+ const rows=[{id:'a'},{id:'b'},{id:'c'}];
+ const p=pageRows([...rows].reverse(),{limit:2,sortDirection:'desc'},'s');
+ assert.deepEqual(pageRows(rows,{cursor:p.backwardsCursor,sortDirection:'asc'},'s').data.map(x=>x.id),['c']);
+ assert.deepEqual(pageRows(rows,{cursor:{itemId:'b'},sortDirection:'asc'},'s').data.map(x=>x.id),['c']);
+});
 test('Codex forward collector excludes reverse receipts including fragmented source writes',()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'dsh-loop-test-')),sourcePath=path.join(root,'source.jsonl');fs.writeFileSync(sourcePath,'');const collector=createPublicCollector(root,{sourcePath});const row=id=>JSON.stringify({timestamp:new Date().toISOString(),type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',id,content:[{type:'output_text',text:'公开回复'}]}});fs.appendFileSync(sourcePath,row('msg_dshlink_'+'a'.repeat(64))+'\n'+row('msg_normal'));collector.drain();assert.equal(collector.snapshot().messages.length,0);fs.appendFileSync(sourcePath,'\n');collector.drain();assert.deepEqual(collector.snapshot().messages.map(x=>x.id),['msg_normal']);});
 
 test('large rollout scan preserves receipts before and after the old tail boundary',async t=>{

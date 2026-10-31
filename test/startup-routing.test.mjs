@@ -49,3 +49,17 @@ test('held history requests do not block desktop authentication IDs and share on
  let released;for(let i=0;i<10;i++){released=await client.request('test/release');if(released.reads)break;await new Promise(resolve=>setTimeout(resolve,5));}
  assert.equal(released.reads,1);assert.equal((await history).data.length,2);assert.deepEqual(await another,await history);
 });
+test('actual proxy decorates timeline reads while preserving opaque native cursors',async t=>{
+ const f=fixture(t),configFile=path.join(f.dir,'bridge.json');
+ write(path.join(f.dir,'app-server'),`require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const x=JSON.parse(line);if(x.id==null)return;let result={};if(x.method==='thread/turns/list')result={data:[{id:'native',items:[],status:'completed'}],nextCursor:null};if(x.method==='thread/items/list')result={data:[],nextCursor:null,backwardsCursor:null};if(x.method==='thread/timeline/list')result={data:[{type:'turnCompleted',turnId:'native',position:20,status:'completed'}],nextCursor:'opaque-native',activeRealtimeSessionAtPageStart:null};process.stdout.write(JSON.stringify({id:x.id,result})+'\\n');});`);
+ write(path.join(f.dir,'ledger.json'),JSON.stringify({version:1,threadId:'thread',sessionId:'session',batches:[{state:'committed',turnId:'external',anchorTurnId:'native',acceptedAt:1000,messages:[{id:'message',role:'assistant',text:'from DSH'}]}]}));
+ write(configFile,JSON.stringify({nativeCli:process.execPath,bindings:[{threadId:'thread',sessionId:'session',ledgerFile:path.join(f.dir,'ledger.json')}],enabled:false,statusFile:path.join(f.dir,'status.json'),watchDir:f.dir}));
+ const proxy=fileURLToPath(new URL('../packages/codex-bridge/proxy-v3.mjs',import.meta.url));
+ const client=new Client(process.execPath,[proxy,'app-server'],{DSH_BRIDGE_CONFIG:configFile,DSH_BRIDGE_BOOTSTRAP_ONLY:'1'},{cwd:f.dir});f.cleanups.push(()=>client.close());await client.initialize();
+ const result=await client.request('thread/timeline/list',{threadId:'thread',cursor:'opaque-before'});
+ assert.equal(result.nextCursor,'opaque-native');assert.equal(result.data.find(e=>e.type==='item').item.text,'from DSH');
+ assert.equal((await client.request('thread/timeline/list',{threadId:'unbound'})).data.length,1);
+ const resumedItems=await client.request('thread/items/list',{threadId:'thread',turnId:'external',cursor:'native-resume-snapshot',sortDirection:'desc',limit:1});
+ assert.equal(resumedItems.data.length,1,'native resume cursor must not empty a synthetic turn');
+ assert.equal(resumedItems.data[0].item.text,'from DSH');
+});

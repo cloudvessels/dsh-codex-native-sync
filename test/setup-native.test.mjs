@@ -39,7 +39,8 @@ test('prepared installation registers a real native plugin, boots its runtime an
   f.cleanups.push(()=>client.close());await client.initialize();
   assert.equal(readJson(path.join(f.runtime,'last-launch.json')).mode,'bridge');
   await assert.rejects(rollbackSetup(f.runtime,environment),/CODEX_BRIDGE_MUST_BE_STOPPED|正常退出/);
-  const spec=readJson(path.join(f.runtime,'marketplace/plugins/dsh-chat-sync/.mcp.json')).mcpServers.dsh_chat_sync;
+  assert.deepEqual(readJson(path.join(f.runtime,'marketplace/plugins/dsh-chat-sync/.mcp.json')).mcpServers,{});
+  const spec={command:process.execPath,args:[path.join(f.runtime,'suite/packages/codex-bridge/src/server.mjs')],env:{DSH_SYNC_PROJECT:path.join(f.runtime,'suite'),DSH_SYNC_CONFIG:f.plan.configFile,DSH_SYNC_DATA:path.join(f.runtime,'data/mcp')}};
   const mcp=new Client(spec.command,spec.args,spec.env);f.cleanups.push(()=>mcp.close());
   await mcp.request('initialize',{protocolVersion:'2024-11-05'});
   const tools=await mcp.request('tools/list');assert(tools.tools.some(tool=>tool.name==='sync_status'));
