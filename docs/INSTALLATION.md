@@ -53,7 +53,7 @@ node setup.mjs --profile "$profileDir" --runtime "$runtimeDir" --native-cli "$na
 node setup.mjs --runtime "$runtimeDir" --activate
 ```
 
-这一步通过原生 Codex 接口登记并安装本地插件，核对其启用状态与 `dsh_chat_sync` 服务，再设置用户级 `CODEX_CLI_PATH`。配置修改只针对本套件的插件与市场项，并检查其他有效配置没有变化；已有其他启动入口时会停止。
+这一步通过原生 Codex 接口登记并安装本地插件，核对启用状态，再设置用户级 `CODEX_CLI_PATH`。从 0.3.8 起，完整安装不自动启动辅助 MCP 服务；后台同步由桥接承担，不依赖 MCP 握手。配置修改只针对本套件的插件与市场项，并检查其他有效配置没有变化；已有其他启动入口时会停止。
 
 原生后台调用只处理配置和插件登记，不发送聊天、不启动模型生成。
 
