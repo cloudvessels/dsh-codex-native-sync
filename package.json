@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-sync-workspace",
-  "version": "0.3.7-preview.1",
+  "version": "0.3.8-preview.1",
   "private": true,
   "type": "module",
   "description": "Codex 与 DSH 原生聊天同步套件，单仓库维护两个配套组件",
@@ -20,7 +20,7 @@
     {
       "path": "packages/codex-bridge",
       "name": "dsh-codex-bridge",
-      "version": "0.3.7-preview.1"
+      "version": "0.3.8-preview.1"
     }
   ]
 }
