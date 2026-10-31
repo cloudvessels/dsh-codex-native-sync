@@ -4,12 +4,13 @@ import {spawn} from 'node:child_process';
 import readline from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {Ledger, atomicJson, readJson, responseItem, notifications, mergeTurns, pageRows, readInjected, PREFIX, hash, codexId} from './history.mjs';
+import {Ledger, atomicJson, readJson, responseItem, notifications, mergeTurns, mergeTimelinePage, pageRows, readInjected, PREFIX, hash, codexId} from './history.mjs';
 import {REVISION, incomingMessages, persistBinding, TextOutbox} from './text-sync.mjs';
 import {OperationOutbox} from './operation-sync.mjs';
 import {TurnCache} from './turn-cache.mjs';
 import {loadSettings} from '../dsh-plugin/src/settings.mjs';
 import {registerBridgeOwner} from '../dsh-plugin/src/state.mjs';
+import {resolveNativeCli} from './src/native-cli.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.DSH_BRIDGE_CONFIG ?? path.join(root, 'config-v3.json');
@@ -21,7 +22,9 @@ if (!config?.nativeCli || !Array.isArray(config.bindings)) throw Error('INVALID_
 
 // Never rewrite a live rollout on startup. The preflight refuses legacy oversized IDs.
 
-const child = spawn(config.nativeCli, args, {env: process.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true});
+const nativeHint=path.basename(config.nativeCli).toLowerCase()==='codex.exe'?(process.env.DSH_SYNC_NATIVE_CLI??config.nativeCli):config.nativeCli;
+const nativeCli=resolveNativeCli(nativeHint);
+const child = spawn(nativeCli, args, {env: process.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true});
 child.stderr.pipe(process.stderr);
 
 if (!serverMode) {
@@ -122,6 +125,7 @@ if (!serverMode) {
   const pending = new Map();
   const desktopPending = new Map();
   let serial = 0, initialized = false, closed = false, chain = Promise.resolve(), timer, watcher;
+  let bootGraceUntil = 0;
   const debugFile = path.join(root, 'data', 'bridge-v2-debug.log');
   const TRACE = process.env.DSH_BRIDGE_TRACE === '1';
   const debug = entry => { try { fs.mkdirSync(path.dirname(debugFile),{recursive:true}); if (fs.existsSync(debugFile) && fs.statSync(debugFile).size > 4 * 1024 * 1024) fs.truncateSync(debugFile, 0); fs.appendFileSync(debugFile, new Date().toISOString() + ' ' + JSON.stringify(entry) + '\n'); } catch {} };
@@ -169,11 +173,17 @@ if (!serverMode) {
   }
 
   const nativeTurnsCache = new TurnCache();
+  let internalHistoryActive=0;const internalHistoryQueue=[];
+  async function historyRequest(params){
+    if(internalHistoryActive<2)internalHistoryActive++;else await new Promise(resolve=>internalHistoryQueue.push(resolve));
+    try{return await request('thread/turns/list',params);}
+    finally{const next=internalHistoryQueue.shift();if(next)next();else internalHistoryActive--;}
+  }
   async function allNativeTurns(binding) {
     return nativeTurnsCache.get(binding.threadId, async () => {
     let rows = [], cursor = null;
     do {
-      const p = await request('thread/turns/list', {threadId: binding.threadId, limit: 100, sortDirection: 'asc', itemsView: 'full', ...(cursor ? {cursor} : {})});
+      const p = await historyRequest({threadId: binding.threadId, limit: 100, sortDirection: 'asc', itemsView: 'full', ...(cursor ? {cursor} : {})});
       rows.push(...p.data);
       if (p.nextCursor === cursor && cursor) throw Error('NATIVE_CURSOR_STALLED');
       cursor = p.nextCursor;
@@ -189,6 +199,13 @@ if (!serverMode) {
     if (!binding) return false;
     const committed = binding.ledger.committed();
     if (!committed.length) return false;
+    if(x.method==='thread/timeline/list'){
+      const page=await request(x.method,p);
+      const native=await allNativeTurns(binding);
+      const interruptedEnds=new Map(native.filter(t=>t.status==='interrupted'||t.status==='failed').map(t=>[t.id,t.items.at(-1)?.id]));
+      output({id:x.id,result:mergeTimelinePage(page,committed,new Set(native.map(t=>t.id)),interruptedEnds)});
+      return true;
+    }
     if (['thread/turns/list', 'thread/items/list', 'thread/items/read'].includes(x.method)) {
       const externalIds = new Set(binding.ledger.turns().map(t => t.id));
       if (p.turnId && !externalIds.has(p.turnId)) return false;
@@ -214,11 +231,17 @@ if (!serverMode) {
       const scope = 'items:' + binding.threadId + ':' + (p.turnId ?? '');
       let adjusted = p;
       if (typeof p.cursor === 'string' && !p.cursor.startsWith('dshpage:')) {
+        // Resume supplies a native snapshot cursor to every turn. Synthetic DSH
+        // turns have no native item ordinals: asking native for that turn yields
+        // an empty page. Start their own item pagination instead.
+        if(p.turnId&&externalIds.has(p.turnId))adjusted={...p,cursor:null};
+        else {
         const original = await request(x.method, p);
         if (!original.data.length) { output({id: x.id, result: original}); return true; }
         const first = rows.findIndex(r => r.item.id === original.data[0].item.id), nativeIds = new Set(native.flatMap(t => t.items.map(i => i.id)));
         const previous = rows.slice(0, first).findLast(r => nativeIds.has(r.item.id));
         adjusted = {...p, cursor: previous ? 'dshpage:' + Buffer.from(JSON.stringify({scope, id: previous.item.id})).toString('base64url') : null};
+        }
       }
       output({id: x.id, result: pageRows(rows, adjusted, scope)});
       return true;
@@ -229,7 +252,7 @@ if (!serverMode) {
   // DSH -> Codex for one binding: pull the bound session snapshot and inject what Codex has not seen.
   async function pump(binding) {
     if (!syncEnabled()) return;
-    if (closed || !initialized || binding.active || binding.archived || (bootstrapOnly&&initialThreads.has(binding.threadId))) return;
+    if (closed || !initialized || Date.now()<bootGraceUntil || binding.active || binding.archived || (bootstrapOnly&&initialThreads.has(binding.threadId))) return;
     try {
       if (binding.origin === 'dsh' && !binding.registered) {
         await dsh('/register', {threadId: binding.threadId, sessionId: binding.sessionId});
@@ -425,7 +448,7 @@ if (!serverMode) {
     if (x.id != null) {
       const original = desktopPending.get(String(x.id));
       desktopPending.delete(String(x.id));
-      if (original?.method === 'initialize' && !x.error) { initialized = true; debug({state: 'initialized'}); save(); schedule(); }
+      if (original?.method === 'initialize' && !x.error) { initialized = true; bootGraceUntil=Date.now()+Math.max(0,config.startupGraceMs??0); debug({state: 'initialized'}); save(); schedule(); }
       if (x.result?.thread && !byThread.has(x.result.thread.id)) void autoRegister(x.result.thread);
       const binding = byThread.get(original?.params?.threadId);
       if (binding) {

@@ -47,7 +47,7 @@ export function collectDsh(snapshot,publicMessages,threadId,sessionId){
 }
 export function responseItem(m){return {type:'message',id:m.id,role:m.role,status:'completed',...(m.role==='assistant'?{phase:'final_answer'}:{}),content:[{type:m.role==='user'?'input_text':'output_text',text:m.text}]};}
 export function visibleItem(m){return m.role==='user'?{type:'userMessage',id:m.id,clientId:null,content:[{type:'text',text:m.text,text_elements:[]}]}:{type:'agentMessage',id:m.id,text:m.text,phase:'final_answer',memoryCitation:null,delivery:null,questions:null};}
-export function visibleTurn(batch){const a=batch.messages;return {id:batch.turnId,rootTurnId:null,items:a.map(visibleItem),itemsView:'full',status:'completed',error:null,startedAt:Math.floor(batch.acceptedAt/1000),completedAt:Math.floor(batch.acceptedAt/1000),durationMs:0};}
+export function visibleTurn(batch){const a=batch.messages;return {id:batch.turnId,rootTurnId:batch.turnId,items:a.map(visibleItem),itemsView:'full',status:'completed',error:null,startedAt:Math.floor(batch.acceptedAt/1000),completedAt:Math.floor(batch.acceptedAt/1000),durationMs:0};}
 export function notifications(threadId,batch){const turn=visibleTurn(batch);return [
  {method:'turn/started',params:{threadId,turn:{...turn,items:[],status:'inProgress',completedAt:null,durationMs:null}}},
  ...turn.items.flatMap(item=>[{method:'item/started',params:{threadId,turnId:turn.id,item,startedAtMs:batch.acceptedAt}},{method:'item/completed',params:{threadId,turnId:turn.id,item,completedAtMs:batch.acceptedAt}}]),
@@ -79,17 +79,44 @@ export function mergeTurns(native,external,direction='asc',batches=[]){
  for(const b of batches){if(!Object.hasOwn(b,'anchorTurnId'))continue;const t=byId.get(b.turnId);if(!t)continue;all=all.filter(x=>x.id!==b.turnId);const anchor=previousByAnchor.get(b.anchorTurnId)??b.anchorTurnId;const index=anchor===null?-1:all.findIndex(x=>x.id===anchor);if(index<0&&anchor!==null){all.push(t);}else all.splice(index+1,0,t);previousByAnchor.set(b.anchorTurnId,b.turnId);}
  return direction==='desc'?all.reverse():all;
 }
+/** Native timeline pages are oldest-first within each page, with an older-page cursor.
+ * Keep native cursors/positions opaque. External events share their anchor position;
+ * their turn/item identities distinguish them, and array order preserves arrival order.
+ */
+export function mergeTimelinePage(page,batches,nativeTurnIds,interruptedEnds=new Map()){
+ const rows=page.data??[],insertions=new Map(),prefix=[];
+ const present=new Set(rows.filter(e=>e.type==='item').map(e=>e.item.id));
+ const ended=new Map(rows.flatMap((e,i)=>e.type==='turnCompleted'?[[e.turnId,i]]:[]));
+ for(let i=0;i<rows.length;i++){const e=rows[i];if(!ended.has(e.turnId)&&e.type==='item'&&interruptedEnds.get(e.turnId)===e.item.id)ended.set(e.turnId,i);}
+ for(const batch of batches){
+  const anchor=batch.anchorTurnId;
+  let index=ended.get(anchor);
+  if(index===undefined){
+   // Unanchored/removed-anchor history belongs before the oldest native page.
+   if(page.nextCursor!=null||anchor!=null&&nativeTurnIds.has(anchor))continue;
+   index=-1;
+  }
+  const turn=visibleTurn(batch),items=turn.items.filter(i=>!present.has(i.id));
+  if(!items.length)continue;
+  const position=index<0?(rows[0]?.position??0):rows[index].position;
+  const events=[{type:'turnStarted',position,turnId:turn.id},
+   ...items.map(item=>({type:'item',position,turnId:turn.id,item})),
+   {type:'turnCompleted',position,turnId:turn.id,status:turn.status,error:turn.error,startedAt:turn.startedAt,completedAt:turn.completedAt,durationMs:turn.durationMs}];
+  if(index<0)prefix.push(...events);else{const group=insertions.get(index)??[];group.push(...events);insertions.set(index,group);}
+ }
+ return {...page,data:[...prefix,...rows.flatMap((e,i)=>[e,...(insertions.get(i)??[])])]};
+}
 export function pageRows(rows,params,scope){
  const direction=params.sortDirection??'asc',limit=Math.min(1000,Math.max(1,params.limit??50));let start=0;
  const cursor=params.cursor;
  if(cursor){
-  let anchor;
+  let anchor,includeAnchor=false;
   if(typeof cursor==='object')anchor=rows.findIndex(r=>(r.item?.id??r.id)===cursor.itemId);
-  else{let decoded;try{decoded=JSON.parse(Buffer.from(cursor.replace(/^dshpage:/,''),'base64url'));}catch{throw Error('INVALID_BRIDGE_CURSOR');}if(decoded.scope!==scope)throw Error('CURSOR_SCOPE_MISMATCH');anchor=rows.findIndex(r=>(r.item?.id??r.id)===decoded.id);}
-  if(anchor<0)throw Error('CURSOR_ANCHOR_MISSING');start=anchor+1;
+  else{let decoded;try{decoded=JSON.parse(Buffer.from(cursor.replace(/^dshpage:/,''),'base64url'));}catch{throw Error('INVALID_BRIDGE_CURSOR');}if(decoded.scope!==scope)throw Error('CURSOR_SCOPE_MISMATCH');anchor=rows.findIndex(r=>(r.item?.id??r.id)===decoded.id);includeAnchor=decoded.backwards===true&&decoded.direction!==direction;}
+  if(anchor<0)throw Error('CURSOR_ANCHOR_MISSING');start=anchor+(includeAnchor?0:1);
  }
- const data=rows.slice(start,start+limit),cursorFor=id=>'dshpage:'+Buffer.from(JSON.stringify({scope,id})).toString('base64url');
- return {data,nextCursor:start+limit<rows.length&&data.length?cursorFor(data.at(-1).item?.id??data.at(-1).id):null,backwardsCursor:data.length?cursorFor(data[0].item?.id??data[0].id):null};
+ const data=rows.slice(start,start+limit),cursorFor=(id,backwards=false)=>'dshpage:'+Buffer.from(JSON.stringify({scope,id,direction,...(backwards?{backwards:true}:{})})).toString('base64url');
+ return {data,nextCursor:start+limit<rows.length&&data.length?cursorFor(data.at(-1).item?.id??data.at(-1).id):null,backwardsCursor:data.length?cursorFor(data[0].item?.id??data[0].id,true):null};
 }
 export async function readInjected(file,ids){
  const found=new Map();if(!file||!fs.existsSync(file)||!ids.size)return found;
