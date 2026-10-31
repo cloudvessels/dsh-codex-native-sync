@@ -51,6 +51,9 @@ class Runtime {
       StartUpdater(root,spec);
       if(spec.ContainsKey("home"))Environment.SetEnvironmentVariable("CODEX_HOME",(string)spec["home"]);
       if(spec.ContainsKey("config"))Environment.SetEnvironmentVariable("DSH_BRIDGE_CONFIG",(string)spec["config"]);
+      // Share the resolved vendor CLI with preflight and proxy. An app update may
+      // have removed the directory still named by runtime.json/config-v3.json.
+      Environment.SetEnvironmentVariable("DSH_SYNC_NATIVE_CLI",native);
       if(Ready(spec,specFile,out reason)){exe=(string)spec["node"];arguments=Args(new[]{(string)spec["proxy"]}.Concat(args));mode="bridge";}}
     catch{reason="runtime_settings_invalid";}
    }
